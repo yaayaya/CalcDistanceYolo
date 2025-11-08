@@ -12,7 +12,7 @@ from typing import Dict, Any
 
 # 配置檔案路徑
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
-SENSOR_CONFIG_PATH = BASE_DIR / "sensor_config.json"
+SENSOR_CONFIG_PATH = BASE_DIR / "configs" / "sensor_config.json"
 NETWORK_CONFIG_PATH = BASE_DIR / "configs" / "network_config.json"
 
 

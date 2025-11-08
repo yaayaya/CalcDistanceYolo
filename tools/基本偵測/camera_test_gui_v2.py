@@ -29,8 +29,20 @@ class ConfigManager:
     """配置檔管理器"""
     
     @staticmethod
-    def load_config(config_path="config.json"):
+    def get_config_path(config_path=None):
+        """取得配置檔絕對路徑"""
+        if config_path and os.path.isabs(config_path):
+            return config_path
+        
+        # 從當前檔案位置計算專案根目錄
+        current_file = os.path.abspath(__file__)
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_file)))
+        return os.path.join(project_root, "backend", "configs", "sensor_config.json")
+    
+    @staticmethod
+    def load_config(config_path=None):
         """載入 JSON 配置檔"""
+        config_path = ConfigManager.get_config_path(config_path)
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 config = json.load(f)
@@ -44,9 +56,13 @@ class ConfigManager:
             return ConfigManager.default_config()
     
     @staticmethod
-    def save_config(config, config_path="config.json"):
+    def save_config(config, config_path=None):
         """儲存配置到 JSON 檔"""
+        config_path = ConfigManager.get_config_path(config_path)
         try:
+            # 確保目錄存在
+            os.makedirs(os.path.dirname(config_path), exist_ok=True)
+            
             with open(config_path, 'w', encoding='utf-8') as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
             print(f"✓ 配置已儲存至: {config_path}")
@@ -181,14 +197,14 @@ class DistanceCalculator:
 class YOLO11DistanceDetectorGUI:
     """YOLO11n 距離偵測器 - GUI版本"""
     
-    def __init__(self, root, config_path="config.json"):
+    def __init__(self, root, config_path=None):
         self.root = root
         self.root.title("YOLO11n 距離偵測系統 v3.1")
         self.root.geometry("1400x900")
         
         # 載入配置
+        self.config_path = ConfigManager.get_config_path(config_path)
         self.config = ConfigManager.load_config(config_path)
-        self.config_path = config_path
         
         # 距離計算器
         self.distance_calculator = DistanceCalculator(self.config)
@@ -958,7 +974,7 @@ class YOLO11DistanceDetectorGUI:
             self.config["camera"]["height"] = self.height_var.get()
             
             if ConfigManager.save_config(self.config, self.config_path):
-                messagebox.showinfo("成功", "攝影機設定已儲存至 config.json")
+                messagebox.showinfo("成功", "攝影機設定已儲存至 sensor_config.json")
             else:
                 messagebox.showerror("錯誤", "儲存失敗")
         except Exception as e:
@@ -973,7 +989,7 @@ class YOLO11DistanceDetectorGUI:
             self.config["performance"]["target_fps"] = self.target_fps_var.get()
             
             if ConfigManager.save_config(self.config, self.config_path):
-                messagebox.showinfo("成功", "效能設定已儲存至 config.json")
+                messagebox.showinfo("成功", "效能設定已儲存至 sensor_config.json")
             else:
                 messagebox.showerror("錯誤", "儲存失敗")
         except Exception as e:
@@ -984,7 +1000,7 @@ class YOLO11DistanceDetectorGUI:
         try:
             if ConfigManager.save_config(self.config, self.config_path):
                 messagebox.showinfo("成功", 
-                    f"焦距 {self.config['distance']['focal_length']:.2f} 已儲存至 config.json")
+                    f"焦距 {self.config['distance']['focal_length']:.2f} 已儲存至 sensor_config.json")
             else:
                 messagebox.showerror("錯誤", "儲存失敗")
         except Exception as e:
@@ -996,9 +1012,9 @@ class YOLO11DistanceDetectorGUI:
             # 先套用設定
             self.apply_settings_internal()
             
-            # 儲存到 config.json
+            # 儲存到 sensor_config.json
             if ConfigManager.save_config(self.config, self.config_path):
-                messagebox.showinfo("成功", "所有設定已儲存至 config.json")
+                messagebox.showinfo("成功", "所有設定已儲存至 sensor_config.json")
             else:
                 messagebox.showerror("錯誤", "儲存失敗")
         except Exception as e:
@@ -1154,7 +1170,7 @@ YOLO11n 距離偵測系統 - 統計報告
 def main():
     """主程式"""
     root = tk.Tk()
-    app = YOLO11DistanceDetectorGUI(root, config_path="config.json")
+    app = YOLO11DistanceDetectorGUI(root)
     root.protocol("WM_DELETE_WINDOW", app.on_closing)
     root.mainloop()
 
