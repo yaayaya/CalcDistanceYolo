@@ -19,7 +19,7 @@ import time
 import json
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageDraw, ImageFont
 import threading
 from ultralytics import YOLO
 from collections import deque
@@ -75,9 +75,14 @@ class ConfigManager:
     def default_config():
         """預設配置"""
         return {
+            "camera": {
+                "source": 0,
+                "width": 1920,
+                "height": 1080
+            },
             "model": {
                 "model_path": "yolo11n.pt",
-                "imgsz": 416,
+                "imgsz": 640,
                 "conf": 0.5,
                 "iou": 0.5,
                 "device": "cpu",
@@ -95,11 +100,6 @@ class ConfigManager:
                 "standing_ratio": 2.5,
                 "sitting_height_factor": 0.6,
                 "crouching_height_factor": 0.75
-            },
-            "camera": {
-                "source": 0,
-                "width": 640,
-                "height": 480
             },
             "performance": {
                 "use_fps_limit": False,
@@ -200,7 +200,7 @@ class YOLO11DistanceDetectorGUI:
     def __init__(self, root, config_path=None):
         self.root = root
         self.root.title("YOLO11n 距離偵測系統 v3.1")
-        self.root.geometry("1400x900")
+        self.root.geometry("1680x950")
         
         # 載入配置
         self.config_path = ConfigManager.get_config_path(config_path)
@@ -243,8 +243,8 @@ class YOLO11DistanceDetectorGUI:
                                font=("Arial", 14, "bold"))
         title_label.pack(pady=5)
         
-        # 畫布
-        self.canvas = tk.Canvas(left_frame, width=800, height=600, bg="black")
+        # 畫布 (支援 1080p 預覽)
+        self.canvas = tk.Canvas(left_frame, width=1280, height=720, bg="black")
         self.canvas.pack(pady=5)
         self.canvas.bind("<Button-1>", self.on_canvas_click)  # 點擊取樣
         
@@ -252,7 +252,7 @@ class YOLO11DistanceDetectorGUI:
         status_frame = ttk.LabelFrame(left_frame, text="即時狀態", padding="10")
         status_frame.pack(fill=tk.X, pady=5)
         
-        self.status_text = tk.Text(status_frame, height=4, width=90, 
+        self.status_text = tk.Text(status_frame, height=4, width=120, 
                                    font=("Consolas", 10))
         self.status_text.pack()
         
@@ -491,23 +491,48 @@ class YOLO11DistanceDetectorGUI:
         self.imgsz_var = tk.IntVar(value=self.config["model"]["imgsz"])
         self.vid_stride_var = tk.IntVar(value=self.config["model"]["vid_stride"])
         
-        ttk.Label(model_frame, text="信心閾值:").grid(row=0, column=0, sticky=tk.W)
+        # GPU 設定
+        device_frame = ttk.LabelFrame(model_frame, text="計算裝置 (GPU/CPU)", padding="5")
+        device_frame.grid(row=0, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
+        
+        ttk.Label(device_frame, text="裝置:").grid(row=0, column=0, sticky=tk.W, padx=5)
+        self.device_var = tk.StringVar(value=self.config["model"].get("device", "cpu"))
+        
+        # 偵測可用裝置
+        available_devices = self.detect_available_devices()
+        device_combo = ttk.Combobox(device_frame, textvariable=self.device_var, 
+                                     values=available_devices, width=15, state="readonly")
+        device_combo.grid(row=0, column=1, sticky=tk.W, padx=5)
+        
+        # 顯示裝置資訊
+        self.device_info_label = ttk.Label(device_frame, text="", foreground="blue", 
+                                          font=("Arial", 8))
+        self.device_info_label.grid(row=0, column=2, sticky=tk.W, padx=5)
+        self.update_device_info()
+        
+        device_combo.bind("<<ComboboxSelected>>", lambda e: self.update_device_info())
+        
+        ttk.Button(device_frame, text="🔄 重新偵測裝置", 
+                  command=self.refresh_devices, width=15).grid(
+            row=1, column=0, columnspan=3, pady=5)
+        
+        ttk.Label(model_frame, text="信心閾值:").grid(row=1, column=0, sticky=tk.W)
         ttk.Scale(model_frame, from_=0.1, to=0.9, variable=self.conf_var, 
-                 orient=tk.HORIZONTAL, length=200).grid(row=0, column=1)
-        ttk.Label(model_frame, textvariable=self.conf_var).grid(row=0, column=2, padx=5)
-        
-        ttk.Label(model_frame, text="IoU 閾值:").grid(row=1, column=0, sticky=tk.W, pady=5)
-        ttk.Scale(model_frame, from_=0.1, to=0.9, variable=self.iou_var, 
                  orient=tk.HORIZONTAL, length=200).grid(row=1, column=1)
-        ttk.Label(model_frame, textvariable=self.iou_var).grid(row=1, column=2, padx=5)
+        ttk.Label(model_frame, textvariable=self.conf_var).grid(row=1, column=2, padx=5)
         
-        ttk.Label(model_frame, text="影像尺寸:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        ttk.Label(model_frame, text="IoU 閾值:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        ttk.Scale(model_frame, from_=0.1, to=0.9, variable=self.iou_var, 
+                 orient=tk.HORIZONTAL, length=200).grid(row=2, column=1)
+        ttk.Label(model_frame, textvariable=self.iou_var).grid(row=2, column=2, padx=5)
+        
+        ttk.Label(model_frame, text="影像尺寸:").grid(row=3, column=0, sticky=tk.W, pady=5)
         ttk.Combobox(model_frame, textvariable=self.imgsz_var, 
-                    values=[320, 416, 640], width=10).grid(row=2, column=1, sticky=tk.W)
+                    values=[320, 416, 640], width=10).grid(row=3, column=1, sticky=tk.W)
         
-        ttk.Label(model_frame, text="跳幀數:").grid(row=3, column=0, sticky=tk.W, pady=5)
+        ttk.Label(model_frame, text="跳幀數:").grid(row=4, column=0, sticky=tk.W, pady=5)
         ttk.Spinbox(model_frame, from_=1, to=10, textvariable=self.vid_stride_var, 
-                   width=10).grid(row=3, column=1, sticky=tk.W)
+                   width=10).grid(row=4, column=1, sticky=tk.W)
         
         # 距離參數
         distance_frame = ttk.LabelFrame(scrollable_frame, text="距離參數", padding="10")
@@ -644,12 +669,36 @@ class YOLO11DistanceDetectorGUI:
         """載入 YOLO 模型"""
         try:
             model_path = self.config["model"]["model_path"]
-            self.update_status(f"正在載入模型: {model_path}")
+            device = self.config["model"].get("device", "cpu")
+            self.update_status(f"正在載入模型: {model_path} (裝置: {device})")
             self.model = YOLO(model_path)
-            self.update_status(f"✓ 模型載入成功")
+            
+            # 顯示裝置資訊
+            device_info = self.get_device_info_text(device)
+            self.update_status(f"✓ 模型載入成功 - {device_info}")
         except Exception as e:
             messagebox.showerror("錯誤", f"載入模型失敗:\n{str(e)}")
             self.update_status(f"❌ 模型載入失敗")
+    
+    def get_device_info_text(self, device):
+        """取得裝置資訊文字"""
+        try:
+            import torch
+            if device == "cpu":
+                return "使用 CPU"
+            elif device.startswith("cuda"):
+                if torch.cuda.is_available():
+                    if device == "cuda":
+                        return f"使用 GPU: {torch.cuda.get_device_name(0)}"
+                    else:
+                        gpu_id = int(device.split(":")[1])
+                        return f"使用 GPU: {torch.cuda.get_device_name(gpu_id)}"
+                return "CUDA 不可用,使用 CPU"
+            elif device == "mps":
+                return "使用 Apple Silicon GPU"
+        except:
+            pass
+        return f"使用 {device}"
     
     def start_detection(self):
         """啟動偵測"""
@@ -799,21 +848,34 @@ class YOLO11DistanceDetectorGUI:
                     self.actual_fps = int(1.0 / avg_frame_time) if avg_frame_time > 0 else 0
                 last_frame_time = time.time()
                 
-                # 在影像上顯示資訊
+                # 在影像上顯示資訊 (使用PIL繪製中文)
                 elapsed = time.time() - self.start_time
                 hours = int(elapsed // 3600)
                 minutes = int((elapsed % 3600) // 60)
                 seconds = int(elapsed % 60)
                 
-                cv2.putText(annotated_frame, f"FPS: {self.fps}/{self.actual_fps}", 
-                           (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                cv2.putText(annotated_frame, f"人數: {self.total_detections}", 
-                           (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                # 轉換為PIL格式以繪製中文
+                annotated_frame = self.draw_chinese_text(
+                    annotated_frame,
+                    f"FPS: {self.fps}/{self.actual_fps}",
+                    (10, 30), (0, 255, 0)
+                )
+                annotated_frame = self.draw_chinese_text(
+                    annotated_frame,
+                    f"人數: {self.total_detections}",
+                    (10, 60), (0, 255, 0)
+                )
                 if self.closest_distance > 0:
-                    cv2.putText(annotated_frame, f"最近: {self.closest_distance:.1f}cm", 
-                               (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-                cv2.putText(annotated_frame, f"運行: {hours:02d}:{minutes:02d}:{seconds:02d}", 
-                           (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                    annotated_frame = self.draw_chinese_text(
+                        annotated_frame,
+                        f"最近: {self.closest_distance:.1f}cm",
+                        (10, 90), (0, 255, 255)
+                    )
+                annotated_frame = self.draw_chinese_text(
+                    annotated_frame,
+                    f"運行: {hours:02d}:{minutes:02d}:{seconds:02d}",
+                    (10, 120), (255, 255, 255)
+                )
                 
                 self.current_frame = annotated_frame
                 
@@ -841,14 +903,145 @@ class YOLO11DistanceDetectorGUI:
         else:
             return (0, 0, 255)  # 紅色
     
+    def detect_available_devices(self):
+        """偵測可用的計算裝置"""
+        devices = ["cpu"]
+        
+        try:
+            import torch
+            
+            # 檢查 NVIDIA CUDA (Windows/Linux)
+            if torch.cuda.is_available():
+                for i in range(torch.cuda.device_count()):
+                    devices.append(f"cuda:{i}")
+                devices.append("cuda")  # 預設 CUDA 裝置
+            
+            # 檢查 Apple Silicon MPS (Mac)
+            if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+                devices.append("mps")
+            
+        except ImportError:
+            print("⚠️ PyTorch 未安裝,僅支援 CPU")
+        except Exception as e:
+            print(f"⚠️ 裝置偵測錯誤: {e}")
+        
+        return devices
+    
+    def update_device_info(self):
+        """更新裝置資訊顯示"""
+        device = self.device_var.get()
+        info_text = ""
+        
+        try:
+            import torch
+            
+            if device == "cpu":
+                info_text = "使用 CPU 運算"
+            elif device.startswith("cuda"):
+                if torch.cuda.is_available():
+                    if device == "cuda":
+                        gpu_name = torch.cuda.get_device_name(0)
+                    else:
+                        gpu_id = int(device.split(":")[1])
+                        gpu_name = torch.cuda.get_device_name(gpu_id)
+                    info_text = f"✓ {gpu_name}"
+                else:
+                    info_text = "❌ CUDA 不可用"
+            elif device == "mps":
+                if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+                    info_text = "✓ Apple Silicon GPU"
+                else:
+                    info_text = "❌ MPS 不可用"
+        except:
+            info_text = ""
+        
+        self.device_info_label.config(text=info_text)
+    
+    def refresh_devices(self):
+        """重新偵測可用裝置"""
+        try:
+            available_devices = self.detect_available_devices()
+            
+            # 更新 device_var 的選項
+            # 找到 Combobox 並更新
+            for widget in self.root.winfo_children():
+                self._update_combobox_recursive(widget, available_devices)
+            
+            self.update_device_info()
+            messagebox.showinfo("裝置偵測", 
+                              f"已偵測到 {len(available_devices)} 個裝置:\n" + 
+                              "\n".join(available_devices))
+        except Exception as e:
+            messagebox.showerror("錯誤", f"重新偵測裝置失敗: {e}")
+    
+    def _update_combobox_recursive(self, widget, values):
+        """遞迴更新 Combobox 選項"""
+        if isinstance(widget, ttk.Combobox):
+            current_val = widget.get()
+            if current_val in ["cpu", "cuda", "mps"] or current_val.startswith("cuda:"):
+                widget['values'] = values
+        for child in widget.winfo_children():
+            self._update_combobox_recursive(child, values)
+    
+    def draw_chinese_text(self, img, text, position, color, font_size=24):
+        """使用PIL在圖像上繪製中文文字"""
+        try:
+            # 將 OpenCV 圖像轉換為 PIL 圖像
+            img_pil = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+            draw = ImageDraw.Draw(img_pil)
+            
+            # 嘗試使用系統中文字體
+            try:
+                # Windows 系統字體
+                font = ImageFont.truetype("msyh.ttc", font_size)  # 微軟雅黑
+            except:
+                try:
+                    font = ImageFont.truetype("C:\\Windows\\Fonts\\msjh.ttc", font_size)  # 微軟正黑體
+                except:
+                    try:
+                        font = ImageFont.truetype("arial.ttf", font_size)  # 備用
+                    except:
+                        font = ImageFont.load_default()  # 最後備用
+            
+            # 繪製文字 (PIL 使用 RGB 順序)
+            color_rgb = (color[2], color[1], color[0])  # BGR to RGB
+            draw.text(position, text, font=font, fill=color_rgb)
+            
+            # 轉換回 OpenCV 格式
+            img_cv = cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
+            return img_cv
+        except Exception as e:
+            print(f"繪製中文錯誤: {e}")
+            # 如果失敗,使用 cv2.putText (英文部分仍可顯示)
+            cv2.putText(img, text, position, cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+            return img
+    
     def update_display(self, frame):
         """更新顯示畫面"""
         try:
-            # 調整大小以符合畫布
+            # 調整大小以符合畫布 (保持16:9比例)
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frame_resized = cv2.resize(frame_rgb, (800, 600))
             
-            img = Image.fromarray(frame_resized)
+            # 計算縮放比例以保持寬高比
+            canvas_w, canvas_h = 1280, 720
+            frame_h, frame_w = frame_rgb.shape[:2]
+            
+            # 計算縮放比例 (保持比例並填滿畫布)
+            scale = min(canvas_w / frame_w, canvas_h / frame_h)
+            new_w = int(frame_w * scale)
+            new_h = int(frame_h * scale)
+            
+            frame_resized = cv2.resize(frame_rgb, (new_w, new_h))
+            
+            # 建立黑色背景畫布
+            canvas_img = np.zeros((canvas_h, canvas_w, 3), dtype=np.uint8)
+            
+            # 將縮放後的影像置中
+            y_offset = (canvas_h - new_h) // 2
+            x_offset = (canvas_w - new_w) // 2
+            canvas_img[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = frame_resized
+            
+            img = Image.fromarray(canvas_img)
             imgtk = ImageTk.PhotoImage(image=img)
             
             self.canvas.create_image(0, 0, anchor=tk.NW, image=imgtk)
@@ -1026,6 +1219,7 @@ class YOLO11DistanceDetectorGUI:
         self.config["model"]["iou"] = self.iou_var.get()
         self.config["model"]["imgsz"] = self.imgsz_var.get()
         self.config["model"]["vid_stride"] = self.vid_stride_var.get()
+        self.config["model"]["device"] = self.device_var.get()
         
         self.config["distance"]["real_person_height"] = self.person_height_var.get()
         self.config["distance"]["use_adaptive_height"] = self.adaptive_height_var.get()
@@ -1080,6 +1274,7 @@ class YOLO11DistanceDetectorGUI:
         self.iou_var.set(self.config["model"]["iou"])
         self.imgsz_var.set(self.config["model"]["imgsz"])
         self.vid_stride_var.set(self.config["model"]["vid_stride"])
+        self.device_var.set(self.config["model"].get("device", "cpu"))
         
         self.person_height_var.set(self.config["distance"]["real_person_height"])
         self.adaptive_height_var.set(self.config["distance"]["use_adaptive_height"])

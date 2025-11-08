@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FlurPaint - 互動藝術裝置</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #000;
+        }
+
+        #display-canvas {
+            max-width: 100%;
+            max-height: 100%;
+            image-rendering: pixelated; /* 保持像素化效果 */
+            transition: filter 0.3s ease;
+        }
+
+        /* 除錯資訊覆蓋層 */
+        #debug-overlay {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: #0f0;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            border-radius: 8px;
+            z-index: 1000;
+            display: none; /* 預設隱藏 */
+            pointer-events: none;
+        }
+
+        #debug-overlay.active {
+            display: block;
+        }
+
+        #debug-overlay .debug-item {
+            margin: 5px 0;
+        }
+
+        #debug-overlay .debug-label {
+            color: #0ff;
+        }
+
+        #debug-overlay .debug-value {
+            color: #fff;
+            font-weight: bold;
+        }
+
+        /* 連線狀態指示器 */
+        #connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+            z-index: 1000;
+            display: none;
+        }
+
+        #connection-status.connecting {
+            background: #f59e0b;
+            color: #fff;
+            display: block;
+        }
+
+        #connection-status.connected {
+            background: #10b981;
+            color: #fff;
+            display: block;
+            animation: fadeOut 2s forwards;
+        }
+
+        #connection-status.disconnected {
+            background: #ef4444;
+            color: #fff;
+            display: block;
+        }
+
+        @keyframes fadeOut {
+            0%, 80% {
+                opacity: 1;
+            }
+            100% {
+                opacity: 0;
+                display: none;
+            }
+        }
+
+        /* 展覽模式說明 */
+        #exhibition-info {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            color: #fff;
+            padding: 15px 30px;
+            border-radius: 30px;
+            font-size: 18px;
+            text-align: center;
+            z-index: 1000;
+            animation: pulse 2s infinite;
+            display: none; /* 預設隱藏 */
+        }
+
+        #exhibition-info.active {
+            display: block;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 0.6;
+            }
+            50% {
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Canvas 顯示區 -->
+    <div id="canvas-container">
+        <canvas id="display-canvas"></canvas>
+    </div>
+
+    <!-- 除錯資訊覆蓋層 -->
+    <div id="debug-overlay">
+        <div class="debug-item">
+            <span class="debug-label">連線狀態:</span>
+            <span class="debug-value" id="debug-connection">未連線</span>
+        </div>
+        <div class="debug-item">
+            <span class="debug-label">偵測距離:</span>
+            <span class="debug-value" id="debug-distance">-- cm</span>
+        </div>
+        <div class="debug-item">
+            <span class="debug-label">偵測人數:</span>
+            <span class="debug-value" id="debug-count">0</span>
+        </div>
+        <div class="debug-item">
+            <span class="debug-label">目標解析度:</span>
+            <span class="debug-value" id="debug-resolution">-- x --</span>
+        </div>
+        <div class="debug-item">
+            <span class="debug-label">當前解析度:</span>
+            <span class="debug-value" id="debug-current-res">-- x --</span>
+        </div>
+        <div class="debug-item">
+            <span class="debug-label">FPS:</span>
+            <span class="debug-value" id="debug-fps">--</span>
+        </div>
+    </div>
+
+    <!-- 連線狀態指示器 -->
+    <div id="connection-status">連線中...</div>
+
+    <!-- 展覽模式說明 -->
+    <div id="exhibition-info">
+        請靠近或遠離感應器,體驗影像解析度的變化
+    </div>
+
+    <script>
+        // ===== 全域變數 =====
+        let ws = null;
+        let config = null;
+        let canvas = null;
+        let ctx = null;
+        
+        // 解析度控制
+        let targetResolution = { width: 1920, height: 1080 };
+        let currentResolution = { width: 1920, height: 1080 };
+        let transitionProgress = 1.0;
+        
+        // FPS 計算
+        let frameCount = 0;
+        let lastFpsUpdate = Date.now();
+        let currentFps = 0;
+
+        // ===== 初始化 =====
+        document.addEventListener('DOMContentLoaded', async () => {
+            canvas = document.getElementById('display-canvas');
+            ctx = canvas.getContext('2d', { alpha: false });
+            
+            // 載入配置
+            await loadConfig();
+            
+            // 套用顯示設定
+            applyDisplaySettings();
+            
+            // 建立 WebSocket 連線
+            connectWebSocket();
+            
+            // 綁定熱鍵
+            bindHotkeys();
+            
+            // 啟動動畫迴圈
+            requestAnimationFrame(animationLoop);
+        });
+
+        // ===== 載入配置 =====
+        async function loadConfig() {
+            try {
+                const response = await fetch('/api/project-config');
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    config = result.data;
+                    console.log('✅ 配置已載入:', config);
+                } else {
+                    console.error('❌ 載入配置失敗');
+                    useDefaultConfig();
+                }
+            } catch (error) {
+                console.error('❌ 載入配置錯誤:', error);
+                useDefaultConfig();
+            }
+        }
+
+        function useDefaultConfig() {
+            config = {
+                blur_control: {
+                    min_resolution_width: 320,
+                    max_resolution_width: 1920,
+                    acceleration_time: 500,
+                    deceleration_time: 1000,
+                    movement_threshold: 10,
+                    activation_delay: 200,
+                    deactivation_delay: 500,
+                    sample_rate: 30
+                },
+                distance_mapping: {
+                    min_distance: 50,
+                    max_distance: 500,
+                    easing_function: "linear"
+                },
+                display: {
+                    debug_mode: false,
+                    exhibition_mode: true,
+                    show_fps: false,
+                    show_distance: false
+                }
+            };
+        }
+
+        // ===== 套用顯示設定 =====
+        function applyDisplaySettings() {
+            const debugOverlay = document.getElementById('debug-overlay');
+            const exhibitionInfo = document.getElementById('exhibition-info');
+            
+            if (config.display.debug_mode) {
+                debugOverlay.classList.add('active');
+                exhibitionInfo.classList.remove('active');
+            } else if (config.display.exhibition_mode) {
+                debugOverlay.classList.remove('active');
+                exhibitionInfo.classList.add('active');
+            } else {
+                debugOverlay.classList.remove('active');
+                exhibitionInfo.classList.remove('active');
+            }
+        }
+
+        // ===== WebSocket 連線 =====
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws/flur`;
+            
+            updateConnectionUI('connecting');
+            
+            try {
+                ws = new WebSocket(wsUrl);
+                
+                ws.onopen = () => {
+                    console.log('✅ WebSocket 已連線');
+                    updateConnectionUI('connected');
+                    updateDebugInfo('connection', '已連線');
+                };
+                
+                ws.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    handleFrameData(data);
+                };
+                
+                ws.onerror = (error) => {
+                    console.error('❌ WebSocket 錯誤:', error);
+                    updateConnectionUI('disconnected');
+                    updateDebugInfo('connection', '連線錯誤');
+                };
+                
+                ws.onclose = () => {
+                    console.log('⏹ WebSocket 已斷線');
+                    updateConnectionUI('disconnected');
+                    updateDebugInfo('connection', '未連線');
+                    
+                    // 5秒後自動重連
+                    setTimeout(connectWebSocket, 5000);
+                };
+                
+            } catch (error) {
+                console.error('❌ 建立 WebSocket 失敗:', error);
+                updateConnectionUI('disconnected');
+            }
+        }
+
+        // ===== 處理影像幀資料 =====
+        function handleFrameData(data) {
+            if (data.type !== 'frame_data') return;
+            
+            // 計算目標解析度
+            const distance = data.distance || 0;
+            targetResolution = mapDistanceToResolution(distance);
+            
+            // 更新除錯資訊
+            updateDebugInfo('distance', `${distance.toFixed(1)} cm`);
+            updateDebugInfo('count', data.total_count || 0);
+            updateDebugInfo('resolution', `${targetResolution.width} x ${targetResolution.height}`);
+            
+            // 解碼並繪製影像
+            const img = new Image();
+            img.onload = () => {
+                drawFrame(img);
+                
+                // 計算 FPS
+                frameCount++;
+                const now = Date.now();
+                if (now - lastFpsUpdate >= 1000) {
+                    currentFps = frameCount;
+                    frameCount = 0;
+                    lastFpsUpdate = now;
+                    updateDebugInfo('fps', currentFps);
+                }
+            };
+            img.src = 'data:image/jpeg;base64,' + data.image;
+        }
+
+        // ===== 距離 → 解析度映射 =====
+        function mapDistanceToResolution(distance) {
+            const minDist = config.distance_mapping.min_distance;
+            const maxDist = config.distance_mapping.max_distance;
+            const minWidth = config.blur_control.min_resolution_width;
+            const maxWidth = config.blur_control.max_resolution_width;
+            
+            // 如果沒有偵測到人 (distance = 0),使用最大解析度
+            if (distance === 0) {
+                return { width: maxWidth, height: Math.round(maxWidth * 9 / 16) };
+            }
+            
+            // 距離限制在範圍內
+            const clampedDist = Math.max(minDist, Math.min(maxDist, distance));
+            
+            // 線性映射 (距離越近,解析度越低)
+            const ratio = (clampedDist - minDist) / (maxDist - minDist);
+            const width = Math.round(minWidth + ratio * (maxWidth - minWidth));
+            const height = Math.round(width * 9 / 16);
+            
+            return { width, height };
+        }
+
+        // ===== 繪製影像幀 =====
+        function drawFrame(img) {
+            // 平滑過渡解析度
+            const lerpSpeed = 0.1;
+            currentResolution.width += (targetResolution.width - currentResolution.width) * lerpSpeed;
+            currentResolution.height += (targetResolution.height - currentResolution.height) * lerpSpeed;
+            
+            // 設定 Canvas 解析度
+            canvas.width = Math.round(currentResolution.width);
+            canvas.height = Math.round(currentResolution.height);
+            
+            // 繪製影像
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            
+            // 更新除錯資訊
+            updateDebugInfo('current-res', `${canvas.width} x ${canvas.height}`);
+        }
+
+        // ===== 動畫迴圈 =====
+        function animationLoop() {
+            // 這裡可以添加其他動畫效果
+            requestAnimationFrame(animationLoop);
+        }
+
+        // ===== 更新連線狀態 UI =====
+        function updateConnectionUI(status) {
+            const statusElement = document.getElementById('connection-status');
+            statusElement.className = status;
+            
+            const statusText = {
+                'connecting': '連線中...',
+                'connected': '已連線',
+                'disconnected': '連線中斷'
+            };
+            
+            statusElement.textContent = statusText[status] || '未知狀態';
+        }
+
+        // ===== 更新除錯資訊 =====
+        function updateDebugInfo(key, value) {
+            const element = document.getElementById(`debug-${key}`);
+            if (element) {
+                element.textContent = value;
+            }
+        }
+
+        // ===== 綁定熱鍵 =====
+        function bindHotkeys() {
+            document.addEventListener('keydown', (e) => {
+                // Ctrl+Shift+D: 切換除錯模式
+                if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+                    config.display.debug_mode = !config.display.debug_mode;
+                    applyDisplaySettings();
+                    e.preventDefault();
+                }
+                
+                // Ctrl+Shift+E: 切換展覽模式
+                if (e.ctrlKey && e.shiftKey && e.key === 'E') {
+                    config.display.exhibition_mode = !config.display.exhibition_mode;
+                    applyDisplaySettings();
+                    e.preventDefault();
+                }
+            });
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FlurPaint 後台管理</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        /* 標題區 */
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            padding: 30px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        header .subtitle {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+        /* 主內容區 */
+        .content {
+            padding: 40px;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section h2 {
+            font-size: 24px;
+            color: #667eea;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        /* 表單樣式 */
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .form-group input[type="number"],
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input[type="number"]:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-group small {
+            display: block;
+            color: #64748b;
+            margin-top: 5px;
+            font-size: 13px;
+        }
+
+        .form-group .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+        }
+
+        .form-group input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        /* 按鈕樣式 */
+        .btn-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-top: 30px;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #64748b;
+            color: #fff;
+        }
+
+        .btn-secondary:hover {
+            background: #475569;
+            transform: translateY(-2px);
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: #fff;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+            transform: translateY(-2px);
+        }
+
+        .btn-warning {
+            background: #f59e0b;
+            color: #fff;
+        }
+
+        .btn-warning:hover {
+            background: #d97706;
+            transform: translateY(-2px);
+        }
+
+        .btn-link {
+            background: transparent;
+            color: #667eea;
+            text-decoration: none;
+            border: 2px solid #667eea;
+        }
+
+        .btn-link:hover {
+            background: #667eea;
+            color: #fff;
+        }
+
+        /* 訊息提示 */
+        .message {
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-weight: 500;
+            animation: slideIn 0.3s ease;
+        }
+
+        .message.success {
+            background: #d1fae5;
+            color: #065f46;
+            border-left: 4px solid #10b981;
+        }
+
+        .message.error {
+            background: #fee2e2;
+            color: #991b1b;
+            border-left: 4px solid #ef4444;
+        }
+
+        .message.info {
+            background: #dbeafe;
+            color: #1e40af;
+            border-left: 4px solid #3b82f6;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        /* 裝置選擇說明 */
+        .device-info {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+
+        .device-info h3 {
+            font-size: 16px;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .device-info p {
+            color: #64748b;
+            font-size: 14px;
+            line-height: 1.6;
+            margin: 5px 0;
+        }
+
+        /* 連結樣式 */
+        .quick-links {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .quick-links a {
+            padding: 10px 20px;
+            background: #f1f5f9;
+            color: #667eea;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .quick-links a:hover {
+            background: #667eea;
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎨 FlurPaint 互動藝術裝置</h1>
+            <p class="subtitle">後台管理與參數設定</p>
+        </header>
+
+        <div class="content">
+            <!-- 視訊模糊控制參數 -->
+            <section class="section">
+                <h2>📺 視訊模糊控制參數</h2>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="min-resolution">最小解析度寬度 (px)</label>
+                        <input type="number" id="min-resolution" min="160" max="1920" step="10">
+                        <small>最近距離時的解析度 (高度自動計算為 16:9)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="max-resolution">最大解析度寬度 (px)</label>
+                        <input type="number" id="max-resolution" min="320" max="1920" step="10">
+                        <small>最遠距離時的解析度 (高度自動計算為 16:9)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="acceleration-time">加速響應時間 (ms)</label>
+                        <input type="number" id="acceleration-time" min="100" max="5000" step="100">
+                        <small>解析度降低 (模糊化) 的過渡時間</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="deceleration-time">減速響應時間 (ms)</label>
+                        <input type="number" id="deceleration-time" min="100" max="5000" step="100">
+                        <small>解析度提高 (清晰化) 的過渡時間</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="movement-threshold">移動閾值 (cm)</label>
+                        <input type="number" id="movement-threshold" min="1" max="50" step="1">
+                        <small>觸發解析度變化的最小距離變化量</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="activation-delay">啟動延遲 (ms)</label>
+                        <input type="number" id="activation-delay" min="0" max="2000" step="50">
+                        <small>偵測到人體後延遲啟動的時間</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="deactivation-delay">停止延遲 (ms)</label>
+                        <input type="number" id="deactivation-delay" min="0" max="2000" step="50">
+                        <small>人體離開後延遲停止的時間</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="sample-rate">取樣頻率 (fps)</label>
+                        <input type="number" id="sample-rate" min="10" max="60" step="5">
+                        <small>距離資料取樣與更新頻率</small>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 距離映射設定 -->
+            <section class="section">
+                <h2>📏 距離映射設定</h2>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="min-distance">最小距離 (cm)</label>
+                        <input type="number" id="min-distance" min="10" max="200" step="5">
+                        <small>對應最低解析度的距離</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="max-distance">最大距離 (cm)</label>
+                        <input type="number" id="max-distance" min="200" max="1000" step="10">
+                        <small>對應最高解析度的距離</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="easing-function">緩動函數</label>
+                        <select id="easing-function">
+                            <option value="linear">線性 (Linear)</option>
+                            <option value="ease-in">緩入 (Ease In)</option>
+                            <option value="ease-out">緩出 (Ease Out)</option>
+                            <option value="ease-in-out">緩入緩出 (Ease In-Out)</option>
+                        </select>
+                        <small>距離到解析度的映射曲線</small>
+                    </div>
+                </div>
+            </section>
+
+            <!-- YOLO 設備選擇 -->
+            <section class="section">
+                <h2>⚙️ YOLO 推論設備</h2>
+                <div class="form-group">
+                    <label for="yolo-device">推論設備</label>
+                    <select id="yolo-device">
+                        <option value="cpu">CPU (相容性最佳)</option>
+                        <option value="cuda">NVIDIA GPU (CUDA)</option>
+                        <option value="mps">Apple Silicon GPU (M1/M2/M3)</option>
+                    </select>
+                    <small id="device-description">使用 CPU 進行推論 (相容性最佳)</small>
+                </div>
+
+                <div class="device-info">
+                    <h3>💡 設備選擇說明</h3>
+                    <p><strong>CPU:</strong> 適用於所有電腦,速度較慢但穩定可靠</p>
+                    <p><strong>NVIDIA GPU (CUDA):</strong> 需要 NVIDIA 顯示卡且已安裝 CUDA,速度最快</p>
+                    <p><strong>Apple Silicon GPU (MPS):</strong> 適用於 M1/M2/M3 晶片的 Mac,需 PyTorch 2.0+</p>
+                </div>
+            </section>
+
+            <!-- 顯示模式設定 -->
+            <section class="section">
+                <h2>🖥️ 顯示模式</h2>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="debug-mode">
+                        <span>除錯模式 (顯示即時狀態資訊)</span>
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="exhibition-mode">
+                        <span>展覽模式 (全螢幕簡潔顯示)</span>
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="show-fps">
+                        <span>顯示 FPS</span>
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="show-distance">
+                        <span>顯示距離資訊</span>
+                    </label>
+                </div>
+            </section>
+
+            <!-- 操作按鈕 -->
+            <div class="btn-group">
+                <button onclick="loadConfig()" class="btn btn-secondary">🔄 重新載入設定</button>
+                <button onclick="saveConfig()" class="btn btn-primary">💾 儲存設定</button>
+                <button onclick="resetConfig()" class="btn btn-warning">↩️ 重置為預設值</button>
+                <a href="/flur.html" target="_blank" class="btn btn-link">🎨 開啟展覽頁面</a>
+            </div>
+
+            <!-- 快速連結 -->
+            <div class="quick-links">
+                <a href="/admin" target="_blank">📊 監控後台</a>
+                <a href="/docs" target="_blank">📖 API 文件</a>
+            </div>
+
+            <!-- 訊息提示 -->
+            <div id="message-container"></div>
+        </div>
+    </div>
+
+    <script>
+        let config = null;
+
+        // 頁面載入時讀取配置
+        document.addEventListener('DOMContentLoaded', () => {
+            loadConfig();
+            bindDeviceChangeEvent();
+        });
+
+        // 載入配置
+        async function loadConfig() {
+            try {
+                const response = await fetch('/api/project-config');
+                const result = await response.json();
+
+                if (result.status === 'success') {
+                    config = result.data;
+                    populateForm();
+                    showMessage('配置已載入', 'success');
+                } else {
+                    showMessage('載入配置失敗', 'error');
+                }
+            } catch (error) {
+                console.error('載入配置錯誤:', error);
+                showMessage('載入配置錯誤: ' + error.message, 'error');
+            }
+        }
+
+        // 填充表單
+        function populateForm() {
+            // 視訊模糊控制
+            document.getElementById('min-resolution').value = config.blur_control.min_resolution_width;
+            document.getElementById('max-resolution').value = config.blur_control.max_resolution_width;
+            document.getElementById('acceleration-time').value = config.blur_control.acceleration_time;
+            document.getElementById('deceleration-time').value = config.blur_control.deceleration_time;
+            document.getElementById('movement-threshold').value = config.blur_control.movement_threshold;
+            document.getElementById('activation-delay').value = config.blur_control.activation_delay;
+            document.getElementById('deactivation-delay').value = config.blur_control.deactivation_delay;
+            document.getElementById('sample-rate').value = config.blur_control.sample_rate;
+
+            // 距離映射
+            document.getElementById('min-distance').value = config.distance_mapping.min_distance;
+            document.getElementById('max-distance').value = config.distance_mapping.max_distance;
+            document.getElementById('easing-function').value = config.distance_mapping.easing_function;
+
+            // YOLO 設備
+            document.getElementById('yolo-device').value = config.yolo_device.device;
+            updateDeviceDescription();
+
+            // 顯示模式
+            document.getElementById('debug-mode').checked = config.display.debug_mode;
+            document.getElementById('exhibition-mode').checked = config.display.exhibition_mode;
+            document.getElementById('show-fps').checked = config.display.show_fps;
+            document.getElementById('show-distance').checked = config.display.show_distance;
+        }
+
+        // 儲存配置
+        async function saveConfig() {
+            try {
+                // 收集表單數據
+                const updatedConfig = {
+                    blur_control: {
+                        min_resolution_width: parseInt(document.getElementById('min-resolution').value),
+                        max_resolution_width: parseInt(document.getElementById('max-resolution').value),
+                        acceleration_time: parseInt(document.getElementById('acceleration-time').value),
+                        deceleration_time: parseInt(document.getElementById('deceleration-time').value),
+                        movement_threshold: parseInt(document.getElementById('movement-threshold').value),
+                        activation_delay: parseInt(document.getElementById('activation-delay').value),
+                        deactivation_delay: parseInt(document.getElementById('deactivation-delay').value),
+                        sample_rate: parseInt(document.getElementById('sample-rate').value)
+                    },
+                    distance_mapping: {
+                        min_distance: parseInt(document.getElementById('min-distance').value),
+                        max_distance: parseInt(document.getElementById('max-distance').value),
+                        easing_function: document.getElementById('easing-function').value
+                    },
+                    yolo_device: {
+                        device: document.getElementById('yolo-device').value,
+                        available_devices: config.yolo_device.available_devices,
+                        device_description: config.yolo_device.device_description
+                    },
+                    display: {
+                        debug_mode: document.getElementById('debug-mode').checked,
+                        exhibition_mode: document.getElementById('exhibition-mode').checked,
+                        show_fps: document.getElementById('show-fps').checked,
+                        show_distance: document.getElementById('show-distance').checked
+                    }
+                };
+
+                const response = await fetch('/api/project-config', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(updatedConfig)
+                });
+
+                const result = await response.json();
+
+                if (result.status === 'success') {
+                    config = result.data;
+                    showMessage('配置已儲存並套用', 'success');
+                } else {
+                    showMessage('儲存配置失敗: ' + result.message, 'error');
+                }
+            } catch (error) {
+                console.error('儲存配置錯誤:', error);
+                showMessage('儲存配置錯誤: ' + error.message, 'error');
+            }
+        }
+
+        // 重置配置
+        async function resetConfig() {
+            if (!confirm('確定要重置所有設定為預設值嗎？')) return;
+
+            try {
+                const response = await fetch('/api/project-config/reset', {
+                    method: 'POST'
+                });
+
+                const result = await response.json();
+
+                if (result.status === 'success') {
+                    config = result.data;
+                    populateForm();
+                    showMessage('配置已重置為預設值', 'success');
+                } else {
+                    showMessage('重置配置失敗: ' + result.message, 'error');
+                }
+            } catch (error) {
+                console.error('重置配置錯誤:', error);
+                showMessage('重置配置錯誤: ' + error.message, 'error');
+            }
+        }
+
+        // 顯示訊息
+        function showMessage(text, type = 'info') {
+            const container = document.getElementById('message-container');
+            const message = document.createElement('div');
+            message.className = `message ${type}`;
+            message.textContent = text;
+
+            container.appendChild(message);
+
+            setTimeout(() => {
+                message.style.opacity = '0';
+                setTimeout(() => {
+                    container.removeChild(message);
+                }, 300);
+            }, 3000);
+        }
+
+        // 綁定設備變更事件
+        function bindDeviceChangeEvent() {
+            document.getElementById('yolo-device').addEventListener('change', updateDeviceDescription);
+        }
+
+        // 更新設備說明
+        function updateDeviceDescription() {
+            const device = document.getElementById('yolo-device').value;
+            const descriptions = {
+                'cpu': '使用 CPU 進行推論 (相容性最佳)',
+                'cuda': '使用 NVIDIA GPU (需要 CUDA 支援)',
+                'mps': '使用 Apple Silicon GPU (M1/M2/M3 晶片)'
+            };
+
+            document.getElementById('device-description').textContent = descriptions[device] || '';
+        }
+    </script>
+</body>
+</html>

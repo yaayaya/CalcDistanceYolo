@@ -110,3 +110,65 @@ async def websocket_live(websocket: WebSocket):
             await websocket.close()
         except:
             pass
+
+
+@router.websocket("/ws/flur")
+async def websocket_flur(websocket: WebSocket):
+    """
+    互動藝術裝置串流 (FlurPaint 展覽作品用)
+    
+    回傳影像幀與距離資料:
+    {
+        "type": "frame_data",
+        "image": "base64_encoded_jpeg",
+        "distance": float,
+        "total_count": int,
+        "timestamp": float,
+        "resolution": {
+            "source": {"width": 1920, "height": 1080}
+        }
+    }
+    """
+    await websocket.accept()
+    
+    try:
+        # 確保偵測器已啟動
+        if not detector_service.is_running:
+            await detector_service.start_detection()
+        
+        # 訂閱偵測串流
+        async for detection_data in detector_service.detection_stream():
+            # 取得當前影像幀的 Base64 編碼
+            frame_base64 = detector_service.get_current_frame_base64(quality=85)
+            
+            if frame_base64 is None:
+                continue
+            
+            # 組裝資料
+            flur_data = {
+                "type": "frame_data",
+                "image": frame_base64,
+                "distance": detection_data.get("closest_distance", 0),
+                "total_count": detection_data.get("total_count", 0),
+                "timestamp": detection_data.get("timestamp", 0),
+                "resolution": {
+                    "source": {
+                        "width": 1920,
+                        "height": 1080
+                    }
+                }
+            }
+            
+            try:
+                await websocket.send_json(flur_data)
+            except WebSocketDisconnect:
+                break
+                
+    except Exception as e:
+        print(f"❌ WebSocket Flur 錯誤: {e}")
+    finally:
+        try:
+            await websocket.close()
+        except:
+            pass
+

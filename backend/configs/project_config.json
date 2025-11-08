@@ -1,0 +1,36 @@
+{
+  "blur_control": {
+    "min_resolution_width": 320,
+    "max_resolution_width": 1920,
+    "acceleration_time": 500,
+    "deceleration_time": 1000,
+    "movement_threshold": 10,
+    "activation_delay": 200,
+    "deactivation_delay": 500,
+    "sample_rate": 30
+  },
+  "distance_mapping": {
+    "min_distance": 50,
+    "max_distance": 100,
+    "easing_function": "linear"
+  },
+  "yolo_device": {
+    "device": "cpu",
+    "available_devices": [
+      "cpu",
+      "cuda",
+      "mps"
+    ],
+    "device_description": {
+      "cpu": "使用 CPU 進行推論 (相容性最佳)",
+      "cuda": "使用 NVIDIA GPU (需要 CUDA 支援)",
+      "mps": "使用 Apple Silicon GPU (M1/M2/M3 晶片)"
+    }
+  },
+  "display": {
+    "debug_mode": true,
+    "exhibition_mode": false,
+    "show_fps": true,
+    "show_distance": true
+  }
+}

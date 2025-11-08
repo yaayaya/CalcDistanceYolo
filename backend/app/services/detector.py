@@ -7,13 +7,14 @@ YOLO 偵測服務 - 核心偵測引擎
 import asyncio
 import cv2
 import time
+import base64
 import numpy as np
 from collections import deque
 from typing import Optional, Dict, Any, AsyncGenerator
 from ultralytics import YOLO
 
 from .calculator import DistanceCalculator
-from ..utils.config_loader import load_sensor_config, get_model_path
+from ..utils.config_loader import load_sensor_config, get_model_path, load_project_config
 
 
 class YOLODetectorService:
@@ -25,6 +26,7 @@ class YOLODetectorService:
     def __init__(self):
         """初始化偵測服務"""
         self.config = load_sensor_config()
+        self.project_config = load_project_config()
         self.model: Optional[YOLO] = None
         self.cap: Optional[cv2.VideoCapture] = None
         self.is_running = False
@@ -43,6 +45,9 @@ class YOLODetectorService:
         # 當前偵測結果快照 (供 REST API 使用)
         self.current_snapshot: Optional[Dict[str, Any]] = None
         
+        # 最新影像幀 (供 Flur 串流使用)
+        self.current_frame: Optional[np.ndarray] = None
+        
     def load_model(self):
         """載入 YOLO 模型"""
         if self.model is not None:
@@ -51,7 +56,10 @@ class YOLODetectorService:
         try:
             model_path = get_model_path()
             self.model = YOLO(str(model_path))
-            print(f"✅ YOLO 模型已載入: {model_path}")
+            
+            # 從 project_config 讀取設備設定
+            device = self.project_config.get("yolo_device", {}).get("device", "cpu")
+            print(f"✅ YOLO 模型已載入: {model_path} (設備: {device})")
         except Exception as e:
             raise RuntimeError(f"無法載入 YOLO 模型: {e}")
     
@@ -138,6 +146,9 @@ class YOLODetectorService:
                     await asyncio.sleep(1)
                     continue
                 
+                # 儲存當前幀供 Flur 串流使用
+                self.current_frame = frame.copy()
+                
                 frame_count += 1
                 
                 # === 跳幀處理 ===
@@ -200,13 +211,16 @@ class YOLODetectorService:
         Returns:
             YOLO Results 物件
         """
+        # 從 project_config 讀取設備設定
+        device = self.project_config.get("yolo_device", {}).get("device", self.config["model"]["device"])
+        
         results = self.model.track(
             source=frame,
             classes=[0],  # 只偵測人類
             conf=self.config["model"]["conf"],
             iou=self.config["model"]["iou"],
             imgsz=self.config["model"]["imgsz"],
-            device=self.config["model"]["device"],
+            device=device,
             tracker=self.config["model"]["tracker"],
             persist=True,  # 保持追蹤 ID
             show=False,
@@ -304,9 +318,40 @@ class YOLODetectorService:
         
         # 重新載入配置
         self.config = load_sensor_config()
+        self.project_config = load_project_config()
         self.distance_calculator = DistanceCalculator(self.config["distance"])
         
         if was_running:
             await self.start_detection()
         
         print("🔄 配置已重新載入")
+    
+    def encode_frame_to_base64(self, frame: np.ndarray, quality: int = 85) -> str:
+        """
+        將影像幀編碼為 Base64 字串
+        
+        Args:
+            frame: OpenCV 影像 (numpy array)
+            quality: JPEG 壓縮品質 (1-100)
+            
+        Returns:
+            Base64 編碼的 JPEG 影像字串
+        """
+        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
+        _, buffer = cv2.imencode('.jpg', frame, encode_param)
+        return base64.b64encode(buffer).decode('utf-8')
+    
+    def get_current_frame_base64(self, quality: int = 85) -> Optional[str]:
+        """
+        取得當前影像幀的 Base64 編碼
+        
+        Args:
+            quality: JPEG 壓縮品質 (1-100)
+            
+        Returns:
+            Base64 編碼的影像,若無影像則返回 None
+        """
+        if self.current_frame is None:
+            return None
+        
+        return self.encode_frame_to_base64(self.current_frame, quality)

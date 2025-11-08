@@ -75,25 +75,42 @@ app.include_router(websocket.router)
 app.include_router(frontend.router)
 
 
-# === 靜態檔案服務 (後台管理介面) ===
+# === 靜態檔案服務 ===
+# 後台管理介面
 app.mount("/admin", StaticFiles(directory="../frontend", html=True), name="admin")
+
+# Flur 頁面服務
+from fastapi.responses import FileResponse
+
+@app.get("/flur")
+async def flur_page():
+    """FlurPaint 互動藝術裝置展示頁面"""
+    return FileResponse("../frontend/flur.html")
+
+@app.get("/flur-admin")
+async def flur_admin_page():
+    """FlurPaint 後台管理頁面"""
+    return FileResponse("../frontend/flur_admin.html")
 
 
 # === 根路徑 ===
 @app.get("/")
 async def root():
     """
-    根路徑 - 重定向到 API 文件
+    根路徑 - 服務資訊
     """
     return {
         "service": "YOLO11 Distance Detection API",
         "version": "1.0.0",
         "status": "running",
         "endpoints": {
+            "flur": "/flur",
+            "flur_admin": "/flur-admin",
             "admin": "/admin",
             "docs": "/docs",
             "websocket_detection": "/ws/detection",
             "websocket_live": "/ws/live",
+            "websocket_flur": "/ws/flur",
             "api": "/api"
         }
     }

@@ -7,7 +7,12 @@ RESTful API 端點 (前端展覽作品用)
 from fastapi import APIRouter, HTTPException
 from ..models.schemas import DetectionResult, DetectionStats, NetworkConfig, ApiResponse
 from ..services.detector import YOLODetectorService
-from ..utils.config_loader import load_network_config, save_network_config
+from ..utils.config_loader import (
+    load_network_config, 
+    save_network_config, 
+    load_project_config,
+    save_project_config
+)
 from typing import Dict, Any
 
 
@@ -155,3 +160,111 @@ async def health_check():
             "version": "1.0.0"
         }
     )
+
+
+@router.get("/project-config", response_model=ApiResponse)
+async def get_project_config():
+    """
+    取得專案配置 (包含視訊模糊控制、YOLO設備等)
+    
+    Returns:
+        project_config.json 的內容
+    """
+    try:
+        config = load_project_config()
+        return ApiResponse(
+            status="success",
+            message="成功取得專案配置",
+            data=config
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"讀取專案配置失敗: {str(e)}")
+
+
+@router.put("/project-config", response_model=ApiResponse)
+async def update_project_config(config: Dict[str, Any]):
+    """
+    更新專案配置
+    
+    Args:
+        config: 新的專案配置字典
+        
+    Returns:
+        更新結果
+    """
+    try:
+        success = save_project_config(config)
+        
+        if success:
+            # 重新載入偵測器配置以套用 YOLO 設備變更
+            await detector_service.reload_config()
+            
+            return ApiResponse(
+                status="success",
+                message="專案配置已更新並重新載入",
+                data=config
+            )
+        else:
+            raise HTTPException(status_code=500, detail="儲存專案配置失敗")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"更新專案配置失敗: {str(e)}")
+
+
+@router.post("/project-config/reset", response_model=ApiResponse)
+async def reset_project_config():
+    """
+    重置專案配置為預設值
+    
+    Returns:
+        重置後的配置
+    """
+    try:
+        default_config = {
+            "blur_control": {
+                "min_resolution_width": 320,
+                "max_resolution_width": 1920,
+                "acceleration_time": 500,
+                "deceleration_time": 1000,
+                "movement_threshold": 10,
+                "activation_delay": 200,
+                "deactivation_delay": 500,
+                "sample_rate": 30
+            },
+            "distance_mapping": {
+                "min_distance": 50,
+                "max_distance": 500,
+                "easing_function": "linear"
+            },
+            "display": {
+                "debug_mode": False,
+                "exhibition_mode": True,
+                "show_fps": False,
+                "show_distance": False
+            },
+            "yolo_device": {
+                "device": "cpu",
+                "available_devices": ["cpu", "cuda", "mps"],
+                "device_description": {
+                    "cpu": "使用 CPU 進行推論 (相容性最佳)",
+                    "cuda": "使用 NVIDIA GPU (需要 CUDA 支援)",
+                    "mps": "使用 Apple Silicon GPU (M1/M2/M3 晶片)"
+                }
+            }
+        }
+        
+        success = save_project_config(default_config)
+        
+        if success:
+            await detector_service.reload_config()
+            
+            return ApiResponse(
+                status="success",
+                message="專案配置已重置為預設值",
+                data=default_config
+            )
+        else:
+            raise HTTPException(status_code=500, detail="重置專案配置失敗")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"重置專案配置失敗: {str(e)}")
