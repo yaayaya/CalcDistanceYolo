@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>速度插值測試頁面</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #667eea;
+            margin-top: 0;
+        }
+        h2 {
+            color: #764ba2;
+            border-bottom: 2px solid #f0f0f0;
+            padding-bottom: 10px;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #5568d3;
+        }
+        button.success {
+            background: #4ade80;
+        }
+        button.danger {
+            background: #ef4444;
+        }
+        pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .status.success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        .status.error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        .status.info {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        input {
+            padding: 8px;
+            border: 2px solid #e0e0e0;
+            border-radius: 5px;
+            margin: 5px;
+            width: 100px;
+        }
+        label {
+            display: inline-block;
+            width: 150px;
+            font-weight: 600;
+        }
+        .form-row {
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🧪 速度插值功能測試</h1>
+        <p>此頁面用於測試速度插值配置的讀取和儲存功能</p>
+    </div>
+
+    <div class="card">
+        <h2>📥 1. 讀取配置</h2>
+        <button onclick="loadConfig()">載入配置</button>
+        <div id="load-status"></div>
+        <pre id="config-display">點擊「載入配置」按鈕</pre>
+    </div>
+
+    <div class="card">
+        <h2>✏️ 2. 修改設定</h2>
+        <div class="form-row">
+            <label>點 1 - 距離 (cm):</label>
+            <input type="number" id="p1-dist" value="130">
+            <label>速度 (x):</label>
+            <input type="number" id="p1-speed" value="8.0" step="0.1">
+        </div>
+        <div class="form-row">
+            <label>點 2 - 距離 (cm):</label>
+            <input type="number" id="p2-dist" value="150">
+            <label>速度 (x):</label>
+            <input type="number" id="p2-speed" value="3.0" step="0.1">
+        </div>
+        <div class="form-row">
+            <label>點 3 - 距離 (cm):</label>
+            <input type="number" id="p3-dist" value="170">
+            <label>速度 (x):</label>
+            <input type="number" id="p3-speed" value="0.5" step="0.1">
+        </div>
+        <div class="form-row">
+            <label>啟用插值模式:</label>
+            <input type="checkbox" id="enabled" checked>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>💾 3. 儲存配置</h2>
+        <button class="success" onclick="saveConfig()">儲存到伺服器</button>
+        <div id="save-status"></div>
+        <pre id="save-response">點擊「儲存到伺服器」按鈕</pre>
+    </div>
+
+    <div class="card">
+        <h2>🧮 4. 插值計算測試</h2>
+        <div class="form-row">
+            <label>測試距離 (cm):</label>
+            <input type="number" id="test-distance" value="140">
+            <button onclick="calculateSpeed()">計算速度</button>
+        </div>
+        <div id="calc-result"></div>
+    </div>
+
+    <div class="card">
+        <h2>📄 5. 檢查配置檔案</h2>
+        <button onclick="window.open('/api/admin/config', '_blank')">開啟 API 端點</button>
+        <p style="color: #666; font-size: 14px;">
+            將在新視窗開啟 <code>/api/admin/config</code> 查看原始 JSON 回應
+        </p>
+    </div>
+
+    <script>
+        let currentConfig = null;
+
+        async function loadConfig() {
+            const statusDiv = document.getElementById('load-status');
+            const displayPre = document.getElementById('config-display');
+            
+            try {
+                statusDiv.innerHTML = '<div class="status info">⏳ 正在載入...</div>';
+                
+                const response = await fetch('/api/admin/config');
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    currentConfig = result.data;
+                    displayPre.textContent = JSON.stringify(result.data, null, 2);
+                    statusDiv.innerHTML = '<div class="status success">✅ 載入成功</div>';
+                    
+                    // 填充表單
+                    if (currentConfig.speedInterpolation && currentConfig.speedInterpolation.points) {
+                        const points = currentConfig.speedInterpolation.points.sort((a, b) => a.distance - b.distance);
+                        document.getElementById('p1-dist').value = points[0].distance;
+                        document.getElementById('p1-speed').value = points[0].speed;
+                        document.getElementById('p2-dist').value = points[1].distance;
+                        document.getElementById('p2-speed').value = points[1].speed;
+                        document.getElementById('p3-dist').value = points[2].distance;
+                        document.getElementById('p3-speed').value = points[2].speed;
+                        document.getElementById('enabled').checked = currentConfig.speedInterpolation.enabled !== false;
+                    }
+                } else {
+                    statusDiv.innerHTML = `<div class="status error">❌ 載入失敗: ${result.message}</div>`;
+                    displayPre.textContent = JSON.stringify(result, null, 2);
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="status error">❌ 錯誤: ${error.message}</div>`;
+                displayPre.textContent = error.stack;
+            }
+        }
+
+        async function saveConfig() {
+            const statusDiv = document.getElementById('save-status');
+            const responsePre = document.getElementById('save-response');
+            
+            try {
+                const p1Dist = parseFloat(document.getElementById('p1-dist').value);
+                const p1Speed = parseFloat(document.getElementById('p1-speed').value);
+                const p2Dist = parseFloat(document.getElementById('p2-dist').value);
+                const p2Speed = parseFloat(document.getElementById('p2-speed').value);
+                const p3Dist = parseFloat(document.getElementById('p3-dist').value);
+                const p3Speed = parseFloat(document.getElementById('p3-speed').value);
+                const enabled = document.getElementById('enabled').checked;
+                
+                // 驗證
+                if (p1Dist >= p2Dist || p2Dist >= p3Dist) {
+                    statusDiv.innerHTML = '<div class="status error">❌ 距離點必須由小到大排列</div>';
+                    return;
+                }
+                
+                const configUpdate = {
+                    speedInterpolation: {
+                        enabled: enabled,
+                        points: [
+                            { distance: p1Dist, speed: p1Speed },
+                            { distance: p2Dist, speed: p2Speed },
+                            { distance: p3Dist, speed: p3Speed }
+                        ]
+                    },
+                    video: {
+                        speedControlMode: enabled ? 'interpolation' : 'linear',
+                        transitionTime: 0
+                    }
+                };
+                
+                statusDiv.innerHTML = '<div class="status info">⏳ 正在儲存...</div>';
+                
+                const response = await fetch('/api/admin/config', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(configUpdate)
+                });
+                
+                const result = await response.json();
+                responsePre.textContent = JSON.stringify(result, null, 2);
+                
+                if (result.status === 'success') {
+                    statusDiv.innerHTML = '<div class="status success">✅ 儲存成功</div>';
+                    currentConfig = result.data;
+                } else {
+                    statusDiv.innerHTML = `<div class="status error">❌ 儲存失敗: ${result.message}</div>`;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="status error">❌ 錯誤: ${error.message}</div>`;
+                responsePre.textContent = error.stack;
+            }
+        }
+
+        function calculateSpeed() {
+            const resultDiv = document.getElementById('calc-result');
+            
+            try {
+                const distance = parseFloat(document.getElementById('test-distance').value);
+                
+                const p1Dist = parseFloat(document.getElementById('p1-dist').value);
+                const p1Speed = parseFloat(document.getElementById('p1-speed').value);
+                const p2Dist = parseFloat(document.getElementById('p2-dist').value);
+                const p2Speed = parseFloat(document.getElementById('p2-speed').value);
+                const p3Dist = parseFloat(document.getElementById('p3-dist').value);
+                const p3Speed = parseFloat(document.getElementById('p3-speed').value);
+                
+                let speed;
+                let explanation;
+                
+                if (distance <= p1Dist) {
+                    speed = p1Speed;
+                    explanation = `距離 ${distance}cm ≤ P1(${p1Dist}cm) → 使用 P1 速度 = ${p1Speed}x`;
+                } else if (distance >= p3Dist) {
+                    speed = p3Speed;
+                    explanation = `距離 ${distance}cm ≥ P3(${p3Dist}cm) → 使用 P3 速度 = ${p3Speed}x`;
+                } else if (distance <= p2Dist) {
+                    const ratio = (distance - p1Dist) / (p2Dist - p1Dist);
+                    speed = p1Speed + (p2Speed - p1Speed) * ratio;
+                    explanation = `距離 ${distance}cm 在 P1(${p1Dist}cm) 和 P2(${p2Dist}cm) 之間<br>比例 = ${ratio.toFixed(4)}<br>速度 = ${p1Speed} + (${p2Speed} - ${p1Speed}) × ${ratio.toFixed(4)} = ${speed.toFixed(2)}x`;
+                } else {
+                    const ratio = (distance - p2Dist) / (p3Dist - p2Dist);
+                    speed = p2Speed + (p3Speed - p2Speed) * ratio;
+                    explanation = `距離 ${distance}cm 在 P2(${p2Dist}cm) 和 P3(${p3Dist}cm) 之間<br>比例 = ${ratio.toFixed(4)}<br>速度 = ${p2Speed} + (${p3Speed} - ${p2Speed}) × ${ratio.toFixed(4)} = ${speed.toFixed(2)}x`;
+                }
+                
+                resultDiv.innerHTML = `
+                    <div class="status success">
+                        <strong>計算結果:</strong><br>
+                        ${explanation}
+                    </div>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="status error">❌ 計算錯誤: ${error.message}</div>`;
+            }
+        }
+
+        // 頁面載入時自動載入配置
+        window.addEventListener('DOMContentLoaded', loadConfig);
+    </script>
+</body>
+</html>

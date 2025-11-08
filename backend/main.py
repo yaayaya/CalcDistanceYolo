@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 
 from app.services.detector import YOLODetectorService
 from app.services.connection_manager import ConnectionManager
-from app.api import websocket, frontend
+from app.api import websocket, frontend, admin_api
 
 
 # 解決 OpenMP 函式庫衝突問題
@@ -44,7 +44,8 @@ async def lifespan(app: FastAPI):
     frontend.init_frontend_services(detector_service)
     
     print("✅ 服務啟動完成!")
-    print("📍 後台管理介面: http://localhost:8000/admin")
+    print("📍 播放頁面: http://localhost:8000/player.html")
+    print("📍 後台管理介面: http://localhost:8000/admin.html")
     print("📍 API 文件: http://localhost:8000/docs")
     
     yield
@@ -73,10 +74,11 @@ app = FastAPI(
 # === 註冊路由 ===
 app.include_router(websocket.router)
 app.include_router(frontend.router)
+app.include_router(admin_api.router)
 
 
-# === 靜態檔案服務 (後台管理介面) ===
-app.mount("/admin", StaticFiles(directory="../frontend", html=True), name="admin")
+# === 靜態檔案服務 (前端頁面) ===
+app.mount("/", StaticFiles(directory="../frontend", html=True), name="frontend")
 
 
 # === 根路徑 ===
@@ -90,11 +92,13 @@ async def root():
         "version": "1.0.0",
         "status": "running",
         "endpoints": {
-            "admin": "/admin",
+            "player": "/player.html",
+            "admin": "/admin.html",
             "docs": "/docs",
             "websocket_detection": "/ws/detection",
             "websocket_live": "/ws/live",
-            "api": "/api"
+            "api": "/api",
+            "admin_api": "/api/admin"
         }
     }
 

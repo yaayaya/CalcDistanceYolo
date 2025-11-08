@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DistanceVideo Player</title>
+    <link rel="stylesheet" href="/css/player.css">
+    <script src="/cdn/axios.min.js"></script>
+</head>
+<body>
+    <div id="player-app">
+        <!-- 影片播放器 -->
+        <video 
+            id="main-video" 
+            class="main-video"
+            playsinline
+        ></video>
+
+        <!-- 除錯資訊面板 -->
+        <div id="debug-panel" class="debug-panel" style="display:none;">
+            <div class="debug-header">
+                <h3>🔍 除錯資訊</h3>
+                <button id="btn-close-debug" class="btn-close">✕</button>
+            </div>
+            
+            <div id="row-speed" class="debug-item">
+                <span class="label">播放速度:</span>
+                <span id="val-speed" class="value">1.00x</span>
+            </div>
+
+            <div id="row-distance" class="debug-item">
+                <span class="label">偵測距離:</span>
+                <span id="val-distance" class="value">0.0 cm</span>
+            </div>
+
+            <div id="row-face" class="debug-item">
+                <span class="label">人臉數量:</span>
+                <span id="val-face" class="value">0</span>
+            </div>
+
+            <div id="row-fps" class="debug-item">
+                <span class="label">FPS:</span>
+                <span id="val-fps" class="value">0</span>
+            </div>
+
+            <div id="row-conn" class="debug-item">
+                <span class="label">連線狀態:</span>
+                <span id="val-conn" class="value disconnected">未連線</span>
+            </div>
+
+            <div id="row-uptime" class="debug-item">
+                <span class="label">運行時間:</span>
+                <span id="val-uptime" class="value">00:00:00</span>
+            </div>
+        </div>
+
+        <!-- 攝影機預覽 -->
+        <div id="camera-preview" class="camera-preview" style="display:none;">
+            <canvas id="preview-canvas"></canvas>
+        </div>
+
+        <!-- 快捷鍵提示 -->
+        <div id="hotkey-hint" class="hotkey-hint" style="display:none;">
+            <p>Ctrl+Shift+D: 切換除錯模式</p>
+            <p>Ctrl+Shift+E: 切換展覽模式</p>
+        </div>
+    </div>
+
+    <script src="/js/api-client.js"></script>
+    <script>
+        // DistanceVideo Player 主應用
+        const app = {
+            // 配置
+            config: {
+                video: {
+                    currentVideo: '',
+                    baseSpeed: 1.0,
+                    maxSpeed: 10.0,
+                    minSpeed: 0.25,
+                    loop: true,
+                    muted: false,
+                    autoplay: true,
+                    transitionTime: 0,
+                    reverseMode: false,
+                    speedControlMode: 'interpolation'
+                },
+                speedInterpolation: {
+                    enabled: true,
+                    points: [
+                        { distance: 130, speed: 8.0 },
+                        { distance: 150, speed: 3.0 },
+                        { distance: 170, speed: 0.5 }
+                    ]
+                },
+                distance: {
+                    minDistance: 50,
+                    maxDistance: 500,
+                    closestPersonMode: true,
+                    distanceThreshold: 10,
+                    smoothingFactor: 0.3,
+                    activationDelay: 300,
+                    deactivationDelay: 1000,
+                    noFaceTimeout: 3000
+                },
+                display: {
+                    debugMode: false,
+                    showSpeed: true,
+                    showDistance: true,
+                    showFaceCount: true,
+                    showFPS: true,
+                    showCameraPreview: false,
+                    cursorHideDelay: 2000,
+                    exhibitionMode: false
+                }
+            },
+
+            // 狀態
+            state: {
+                currentSpeed: 1.0,
+                targetSpeed: 1.0,
+                closestDistance: 0,
+                prevDistance: 0,
+                rawDistance: 0,
+                faceCount: 0,
+                fps: 0,
+                connectionStatus: '未連線',
+                uptime: '00:00:00',
+                startTime: null,
+                ws: null,
+                video: null,
+                lastFaceTime: null,
+                activationTimer: null,
+                deactivationTimer: null,
+                speedTransition: null,
+                cursorTimer: null,
+                showHint: false,
+                playAttempted: false,
+                videoReady: false
+            },
+
+            // 初始化
+            async init() {
+                console.log('🚀 初始化 DistanceVideo Player...');
+                
+                // 取得影片元素
+                this.state.video = document.getElementById('main-video');
+                console.log('📺 影片元素:', this.state.video);
+                
+                // 載入配置
+                await this.loadConfig();
+                console.log('⚙️ 配置已載入:', this.config);
+                
+                // 設定影片源
+                this.updateVideoSrc();
+                
+                // 依配置設定影片屬性
+                this.state.video.loop = !!this.config.video.loop;
+                this.state.video.muted = !!this.config.video.muted;
+                this.state.video.autoplay = !!this.config.video.autoplay;
+                console.log('📝 影片屬性已設定:', {
+                    loop: this.state.video.loop,
+                    muted: this.state.video.muted,
+                    autoplay: this.state.video.autoplay
+                });
+                
+                // 綁定事件
+                this.bindEvents();
+                
+                // 啟動計時器
+                this.startTimers();
+                
+                // 等待影片準備好後再建立 WebSocket (避免競爭)
+                this.state.video.addEventListener('loadedmetadata', () => {
+                    console.log('✅ 影片元資料已載入');
+                    console.log('   影片長度:', this.state.video.duration, '秒');
+                    console.log('   影片解析度:', this.state.video.videoWidth, 'x', this.state.video.videoHeight);
+                    this.connectWebSocket();
+                }, { once: true });
+                
+                // 若已有元資料則立即連線
+                if (this.state.video.readyState >= 1) {
+                    console.log('ℹ️ 影片已有元資料，立即連線 WebSocket');
+                    this.connectWebSocket();
+                }
+                
+                console.log('✅ 初始化完成');
+            },
+
+            // 載入配置
+            async loadConfig() {
+                try {
+                    console.log('📥 正在載入配置...');
+                    const response = await apiClient.getConfig();
+                    this.config = response.data;
+                    console.log('✅ 配置已載入:', this.config);
+                    
+                    // 驗證速度插值配置
+                    if (this.config.speedInterpolation) {
+                        console.log('📈 速度插值配置:', this.config.speedInterpolation);
+                        if (this.config.speedInterpolation.enabled) {
+                            console.log('✓ 三點插值模式已啟用');
+                            console.log('  點 1:', this.config.speedInterpolation.points[0]);
+                            console.log('  點 2:', this.config.speedInterpolation.points[1]);
+                            console.log('  點 3:', this.config.speedInterpolation.points[2]);
+                        } else {
+                            console.log('✓ 使用傳統雙點模式');
+                        }
+                    }
+                    
+                    this.updateUI();
+                } catch (error) {
+                    console.error('❌ 載入配置失敗:', error);
+                }
+            },
+
+            // 更新影片源
+            updateVideoSrc() {
+                if (this.config.video.currentVideo) {
+                    const videoSrc = `/videos/${this.config.video.currentVideo}`;
+                    console.log('🎬 設定影片源:', videoSrc);
+                    
+                    this.state.video.src = videoSrc;
+                    
+                    // 載入影片
+                    this.state.video.load();
+                    
+                    // 監聽影片事件
+                    this.state.video.addEventListener('loadstart', () => {
+                        console.log('📥 影片開始載入...');
+                    }, { once: true });
+                    
+                    this.state.video.addEventListener('canplay', () => {
+                        console.log('✅ 影片可以播放');
+                        this.state.videoReady = true;
+                        this.tryAutoPlay();
+                    }, { once: true });
+                    
+                    this.state.video.addEventListener('loadedmetadata', () => {
+                        console.log('📋 影片元資料已載入');
+                        this.state.videoReady = true;
+                        this.tryAutoPlay();
+                    }, { once: true });
+                    
+                    this.state.video.addEventListener('error', (e) => {
+                        console.error('❌ 影片載入錯誤:', e);
+                        console.error('   錯誤代碼:', this.state.video.error?.code);
+                        console.error('   錯誤訊息:', this.state.video.error?.message);
+                    }, { once: true });
+                } else {
+                    console.warn('⚠️ 未設定 currentVideo');
+                }
+            },
+            
+            // 嘗試自動播放
+            tryAutoPlay() {
+                if (this.state.playAttempted || !this.state.videoReady) {
+                    return;
+                }
+                
+                this.state.playAttempted = true;
+                
+                console.log('▶️ 嘗試自動播放影片...');
+                const playPromise = this.state.video.play();
+                
+                if (playPromise !== undefined) {
+                    playPromise
+                        .then(() => {
+                            console.log('✅ 影片自動播放成功');
+                        })
+                        .catch(err => {
+                            console.warn('⚠️ 自動播放被阻擋:', err.message);
+                            // 顯示點擊提示
+                            this.showPlayPrompt();
+                        });
+                }
+            },
+            
+            // 顯示播放提示
+            showPlayPrompt() {
+                // 創建點擊提示覆蓋層
+                const overlay = document.createElement('div');
+                overlay.id = 'play-prompt';
+                overlay.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0, 0, 0, 0.7);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 9999;
+                    cursor: pointer;
+                `;
+                
+                const message = document.createElement('div');
+                message.style.cssText = `
+                    background: white;
+                    padding: 30px 50px;
+                    border-radius: 10px;
+                    font-size: 20px;
+                    text-align: center;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                `;
+                message.innerHTML = '▶️<br>點擊螢幕開始播放';
+                
+                overlay.appendChild(message);
+                document.body.appendChild(overlay);
+                
+                // 點擊後播放並移除提示
+                overlay.addEventListener('click', () => {
+                    this.state.video.play()
+                        .then(() => {
+                            console.log('✅ 使用者互動後播放成功');
+                            overlay.remove();
+                        })
+                        .catch(err => {
+                            console.error('❌ 播放失敗:', err);
+                        });
+                });
+            },
+
+            // 建立 WebSocket 連線
+            connectWebSocket() {
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${protocol}//${window.location.host}/ws/detection`;
+                
+                console.log('連線 WebSocket:', wsUrl);
+                this.state.connectionStatus = '連線中...';
+                this.updateUI();
+                
+                this.state.ws = new WebSocket(wsUrl);
+                
+                this.state.ws.onopen = () => {
+                    console.log('✅ WebSocket 已連線');
+                    this.state.connectionStatus = '已連線';
+                    this.state.startTime = Date.now();
+                    this.updateUI();
+                };
+                
+                this.state.ws.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    this.handleDetectionData(data);
+                };
+                
+                this.state.ws.onerror = (error) => {
+                    console.error('❌ WebSocket 錯誤:', error);
+                    this.state.connectionStatus = '連線錯誤';
+                    this.updateUI();
+                };
+                
+                this.state.ws.onclose = () => {
+                    console.log('⏹ WebSocket 已斷線');
+                    this.state.connectionStatus = '未連線';
+                    this.updateUI();
+                    
+                    // 5秒後嘗試重連
+                    setTimeout(() => this.connectWebSocket(), 5000);
+                };
+            },
+
+            // 處理偵測資料
+            handleDetectionData(data) {
+                // 更新狀態
+                this.state.faceCount = data.total_count || 0;
+                this.state.fps = data.actual_fps || 0;
+                
+                // 取得最近距離
+                const rawDistance = data.closest_distance || 0;
+                
+                // Debug: 記錄收到的資料
+                if (this.state.faceCount > 0) {
+                    console.log(`📡 收到偵測資料: 人臉=${this.state.faceCount}, 原始距離=${rawDistance.toFixed(1)}cm, FPS=${this.state.fps}`);
+                }
+                
+                // 儲存上一次的平滑距離用於閾值比較
+                const prevDistance = this.state.closestDistance;
+                
+                // 距離平滑處理
+                if (this.state.closestDistance === 0) {
+                    this.state.closestDistance = rawDistance;
+                } else {
+                    const factor = this.config.distance.smoothingFactor;
+                    this.state.closestDistance = 
+                        this.state.closestDistance * (1 - factor) + rawDistance * factor;
+                }
+                
+                // 記錄原始距離供閾值比較
+                this.state.prevDistance = prevDistance;
+                this.state.rawDistance = rawDistance;
+                
+                // 根據距離計算目標速度
+                this.calculateTargetSpeed();
+                
+                // 更新 UI
+                this.updateUI();
+            },
+
+            // 計算目標速度 (三點線性插值)
+            calculateTargetSpeed() {
+                const distance = this.state.closestDistance;
+                
+                // 無人或距離為 0
+                if (this.state.faceCount === 0 || distance === 0) {
+                    console.log('🚫 無人臉或距離為0，處理無人臉情況');
+                    this.handleNoFace();
+                    return;
+                }
+                
+                // 記錄最後偵測到人臉的時間
+                this.state.lastFaceTime = Date.now();
+                
+                let targetSpeed = this.config.video.baseSpeed;
+                
+                // 使用三點插值模式
+                if (this.config.speedInterpolation && this.config.speedInterpolation.enabled) {
+                    const points = this.config.speedInterpolation.points;
+                    
+                    // 確保有三個點且已排序
+                    if (points && points.length >= 3) {
+                        // 按距離排序
+                        const sortedPoints = [...points].sort((a, b) => a.distance - b.distance);
+                        const p1 = sortedPoints[0];  // 最近距離點
+                        const p2 = sortedPoints[1];  // 中間距離點
+                        const p3 = sortedPoints[2];  // 最遠距離點
+                        
+                        if (distance <= p1.distance) {
+                            // 小於等於最近點: 使用最近點速度
+                            targetSpeed = p1.speed;
+                        } else if (distance >= p3.distance) {
+                            // 大於等於最遠點: 使用最遠點速度
+                            targetSpeed = p3.speed;
+                        } else if (distance <= p2.distance) {
+                            // 在最近點和中間點之間: 線性插值
+                            const ratio = (distance - p1.distance) / (p2.distance - p1.distance);
+                            targetSpeed = p1.speed + (p2.speed - p1.speed) * ratio;
+                        } else {
+                            // 在中間點和最遠點之間: 線性插值
+                            const ratio = (distance - p2.distance) / (p3.distance - p2.distance);
+                            targetSpeed = p2.speed + (p3.speed - p2.speed) * ratio;
+                        }
+                        
+                        console.log(`🎯 三點插值 | 距離: ${distance.toFixed(1)}cm | P1(${p1.distance}cm,${p1.speed}x) P2(${p2.distance}cm,${p2.speed}x) P3(${p3.distance}cm,${p3.speed}x) → 速度: ${targetSpeed.toFixed(2)}x`);
+                    }
+                } else {
+                    // 回退到傳統雙點模式
+                    const { minDistance, maxDistance } = this.config.distance;
+                    const { maxSpeed, minSpeed, reverseMode } = this.config.video;
+                    
+                    let ratio = 0;
+                    if (distance <= minDistance) {
+                        ratio = 1;
+                    } else if (distance >= maxDistance) {
+                        ratio = 0;
+                    } else {
+                        // 線性插值：距離越近，比例越大
+                        ratio = 1 - (distance - minDistance) / (maxDistance - minDistance);
+                    }
+                    
+                    if (reverseMode) {
+                        // 反向模式: 距離近播放慢
+                        targetSpeed = minSpeed + (maxSpeed - minSpeed) * (1 - ratio);
+                    } else {
+                        // 正常模式: 距離近播放快
+                        targetSpeed = minSpeed + (maxSpeed - minSpeed) * ratio;
+                    }
+                    
+                    console.log(`🎯 傳統模式 | 距離: ${distance.toFixed(1)}cm | 範圍: ${minDistance}-${maxDistance}cm | 比例: ${(ratio * 100).toFixed(0)}% | 速度: ${targetSpeed.toFixed(2)}x`);
+                }
+                
+                // 限制速度範圍
+                const { minSpeed, maxSpeed } = this.config.video;
+                targetSpeed = Math.max(minSpeed, Math.min(maxSpeed, targetSpeed));
+                
+                this.state.targetSpeed = targetSpeed;
+                
+                // 清除停用計時器
+                if (this.state.deactivationTimer) {
+                    clearTimeout(this.state.deactivationTimer);
+                    this.state.deactivationTimer = null;
+                }
+                
+                // 即時切換速度 (不使用平滑過渡)
+                this.applySpeedInstantly(targetSpeed);
+            },
+
+            // 處理無人臉情況
+            handleNoFace() {
+                if (!this.state.lastFaceTime) return;
+                
+                const timeSinceLastFace = Date.now() - this.state.lastFaceTime;
+                
+                if (timeSinceLastFace > this.config.distance.noFaceTimeout) {
+                    // 清除啟動計時器
+                    if (this.state.activationTimer) {
+                        clearTimeout(this.state.activationTimer);
+                        this.state.activationTimer = null;
+                    }
+                    
+                    // 設定停用計時器
+                    if (!this.state.deactivationTimer) {
+                        this.state.deactivationTimer = setTimeout(() => {
+                            this.transitionSpeed(this.config.video.baseSpeed);
+                            this.state.deactivationTimer = null;
+                        }, this.config.distance.deactivationDelay);
+                    }
+                }
+            },
+
+            // 即時套用速度 (無平滑過渡)
+            applySpeedInstantly(targetSpeed) {
+                // 取消任何進行中的速度過渡
+                if (this.state.speedTransition) {
+                    cancelAnimationFrame(this.state.speedTransition);
+                    this.state.speedTransition = null;
+                }
+                
+                // 取消啟動計時器
+                if (this.state.activationTimer) {
+                    clearTimeout(this.state.activationTimer);
+                    this.state.activationTimer = null;
+                }
+                
+                // 即時設定速度
+                this.state.currentSpeed = targetSpeed;
+                this.state.video.playbackRate = targetSpeed;
+                
+                console.log(`⚡ 即時切換速度: ${targetSpeed.toFixed(2)}x`);
+                
+                // 更新 UI
+                this.updateUI();
+            },
+
+            // 保留平滑過渡函式供特殊情況使用 (例如無人臉回復基礎速度)
+            transitionSpeed(targetSpeed) {
+                if (this.state.speedTransition) {
+                    cancelAnimationFrame(this.state.speedTransition);
+                }
+                
+                const startSpeed = this.state.currentSpeed;
+                const startTime = Date.now();
+                const duration = this.config.video.transitionTime;
+                
+                console.log(`🎬 開始速度轉換: ${startSpeed.toFixed(2)}x → ${targetSpeed.toFixed(2)}x (${duration}ms)`);
+                
+                const animate = () => {
+                    const elapsed = Date.now() - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+                    
+                    // Ease-out 曲線
+                    const eased = 1 - Math.pow(1 - progress, 3);
+                    
+                    this.state.currentSpeed = startSpeed + (targetSpeed - startSpeed) * eased;
+                    this.state.video.playbackRate = this.state.currentSpeed;
+                    
+                    if (progress < 1) {
+                        this.state.speedTransition = requestAnimationFrame(animate);
+                    } else {
+                        this.state.speedTransition = null;
+                        console.log(`✅ 速度轉換完成: 當前速度=${this.state.currentSpeed.toFixed(2)}x, playbackRate=${this.state.video.playbackRate.toFixed(2)}x`);
+                    }
+                    
+                    this.updateUI();
+                };
+                
+                animate();
+            },
+
+            // 更新 UI
+            updateUI() {
+                // 更新所有除錯資訊
+                this.updateDebugPanel();
+            },
+
+            // 更新除錯面板
+            updateDebugPanel() {
+                const show = (el, visible) => {
+                    if (!el) return;
+                    el.style.display = visible ? '' : 'none';
+                };
+
+                const panel = document.getElementById('debug-panel');
+                show(panel, this.config.display.debugMode && !this.config.display.exhibitionMode);
+
+                // 行為切換
+                const rowSpeed = document.getElementById('row-speed');
+                const rowDistance = document.getElementById('row-distance');
+                const rowFace = document.getElementById('row-face');
+                const rowFps = document.getElementById('row-fps');
+
+                show(rowSpeed, !!this.config.display.showSpeed);
+                show(rowDistance, !!this.config.display.showDistance);
+                show(rowFace, !!this.config.display.showFaceCount);
+                show(rowFps, !!this.config.display.showFPS);
+
+                // 值更新
+                const valSpeed = document.getElementById('val-speed');
+                const valDistance = document.getElementById('val-distance');
+                const valFace = document.getElementById('val-face');
+                const valFps = document.getElementById('val-fps');
+                const valConn = document.getElementById('val-conn');
+                const valUptime = document.getElementById('val-uptime');
+
+                if (valSpeed) valSpeed.textContent = `${this.state.currentSpeed.toFixed(2)}x`;
+                if (valDistance) {
+                    const d = this.state.closestDistance || 0;
+                    valDistance.textContent = `${d.toFixed(1)} cm`;
+                    valDistance.classList.remove('danger', 'warning', 'safe');
+                    const distance = d;
+                    let cls = '';
+                    if (distance === 0) cls = '';
+                    else if (distance < 150) cls = 'danger';
+                    else if (distance < 300) cls = 'warning';
+                    else cls = 'safe';
+                    if (cls) valDistance.classList.add(cls);
+                }
+                if (valFace) valFace.textContent = String(this.state.faceCount);
+                if (valFps) valFps.textContent = String(Math.round(this.state.fps));
+
+                if (valConn) {
+                    valConn.textContent = this.state.connectionStatus;
+                    valConn.classList.remove('connected', 'disconnected');
+                    valConn.classList.add(this.state.connectionStatus === '已連線' ? 'connected' : 'disconnected');
+                }
+                if (valUptime) valUptime.textContent = this.state.uptime;
+
+                // 攝影機預覽顯示
+                const cam = document.getElementById('camera-preview');
+                show(cam, !!this.config.display.showCameraPreview && !!this.config.display.debugMode);
+
+                // 快捷鍵提示
+                const hint = document.getElementById('hotkey-hint');
+                show(hint, !!this.state.showHint);
+            },
+
+            // 綁定事件
+            bindEvents() {
+                // 快捷鍵
+                document.addEventListener('keydown', (e) => {
+                    // Ctrl+Shift+D: 切換除錯模式
+                    if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+                        e.preventDefault();
+                        this.config.display.debugMode = !this.config.display.debugMode;
+                        this.updateUI();
+                    }
+                    
+                    // Ctrl+Shift+E: 切換展覽模式
+                    if (e.ctrlKey && e.shiftKey && e.key === 'E') {
+                        e.preventDefault();
+                        this.toggleExhibitionMode();
+                    }
+                });
+                
+                // 滑鼠移動 - 游標隱藏
+                document.addEventListener('mousemove', () => {
+                    document.body.style.cursor = 'default';
+                    
+                    if (this.state.cursorTimer) {
+                        clearTimeout(this.state.cursorTimer);
+                    }
+                    
+                    this.state.cursorTimer = setTimeout(() => {
+                        if (this.config.display.exhibitionMode) {
+                            document.body.style.cursor = 'none';
+                        }
+                    }, this.config.display.cursorHideDelay);
+                });
+            },
+
+            // 切換展覽模式
+            toggleExhibitionMode() {
+                this.config.display.exhibitionMode = !this.config.display.exhibitionMode;
+                
+                if (this.config.display.exhibitionMode) {
+                    // 進入全螢幕
+                    if (document.documentElement.requestFullscreen) {
+                        document.documentElement.requestFullscreen();
+                    }
+                    document.body.style.cursor = 'none';
+                } else {
+                    // 退出全螢幕
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                    }
+                    document.body.style.cursor = 'default';
+                }
+                
+                this.updateUI();
+            },
+
+            // 切換除錯模式
+            toggleDebug() {
+                this.config.display.debugMode = false;
+                this.updateUI();
+            },
+
+            // 啟動計時器
+            startTimers() {
+                // 運行時間更新
+                setInterval(() => {
+                    if (this.state.startTime) {
+                        const elapsed = Math.floor((Date.now() - this.state.startTime) / 1000);
+                        const hours = Math.floor(elapsed / 3600);
+                        const minutes = Math.floor((elapsed % 3600) / 60);
+                        const seconds = elapsed % 60;
+                        
+                        this.state.uptime = 
+                            `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                        
+                        this.updateUI();
+                    }
+                }, 1000);
+                
+                // 顯示快捷鍵提示 (3秒後消失)
+                this.state.showHint = true;
+                setTimeout(() => {
+                    this.state.showHint = false;
+                }, 3000);
+            },
+
+            // 計算距離顏色類別
+            get distanceClass() {
+                const distance = this.state.closestDistance;
+                if (distance === 0) return '';
+                if (distance < 150) return 'danger';
+                if (distance < 300) return 'warning';
+                return 'safe';
+            },
+
+            // 計算連線狀態類別
+            get connectionStatusClass() {
+                return this.state.connectionStatus === '已連線' ? 'connected' : 'disconnected';
+            },
+
+            // 計算影片源
+            get videoSrc() {
+                return this.config.video.currentVideo 
+                    ? `/videos/${this.config.video.currentVideo}` 
+                    : '';
+            }
+        };
+
+        // 啟動應用
+        window.addEventListener('DOMContentLoaded', () => {
+            app.init();
+            // 關閉除錯面板按鈕
+            const closeBtn = document.getElementById('btn-close-debug');
+            if (closeBtn) closeBtn.addEventListener('click', () => app.toggleDebug());
+            
+            // 將 app 暴露到全域供除錯使用
+            window.playerApp = app;
+        });
+    </script>
+</body>
+</html>

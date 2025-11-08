@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DistanceVideo - 後台管理</title>
+    <link rel="stylesheet" href="/css/admin.css">
+    <script src="/cdn/vue.global.prod.js"></script>
+    <script src="/cdn/axios.min.js"></script>
+</head>
+<body>
+    <div id="admin-app">
+        <header class="admin-header">
+            <h1>DistanceVideo 後台管理</h1>
+            <div class="header-actions">
+                <button @click="loadConfig" class="btn btn-secondary">重新載入</button>
+                <button @click="saveConfig" class="btn btn-primary">儲存設定</button>
+                <a href="/player.html" class="btn btn-link" target="_blank">開啟播放頁面</a>
+            </div>
+        </header>
+
+        <div class="admin-container">
+            <!-- 左側選單 -->
+            <aside class="sidebar">
+                <nav class="nav-menu">
+                    <a 
+                        href="#" 
+                        :class="{ active: currentTab === 'video' }"
+                        @click.prevent="currentTab = 'video'"
+                    >
+                        影片控制參數
+                    </a>
+                    <a 
+                        href="#" 
+                        :class="{ active: currentTab === 'distance' }"
+                        @click.prevent="currentTab = 'distance'"
+                    >
+                        距離偵測校準
+                    </a>
+                    <a 
+                        href="#" 
+                        :class="{ active: currentTab === 'display' }"
+                        @click.prevent="currentTab = 'display'"
+                    >
+                        顯示模式控制
+                    </a>
+                    <a 
+                        href="#" 
+                        :class="{ active: currentTab === 'videos' }"
+                        @click.prevent="currentTab = 'videos'"
+                    >
+                        影片管理
+                    </a>
+                </nav>
+            </aside>
+
+            <!-- 主要內容區 -->
+            <main class="main-content">
+                <!-- 影片控制參數 -->
+                <section v-show="currentTab === 'video'" class="panel">
+                    <h2>影片控制參數</h2>
+                    
+                    <div class="form-group">
+                        <label>基礎播放速度 (baseSpeed)</label>
+                        <input 
+                            type="number" 
+                            v-model.number="config.video.baseSpeed" 
+                            step="0.1" 
+                            min="0.25" 
+                            max="20.0"
+                        >
+                        <span class="help-text">正常播放倍率 (0.25-20.0)</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label>最大播放速度 (maxSpeed)</label>
+                        <input 
+                            type="number" 
+                            v-model.number="config.video.maxSpeed" 
+                            step="0.1" 
+                            min="0.25" 
+                            max="20.0"
+                        >
+                        <span class="help-text">當人最接近時的播放速度</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label>最小播放速度 (minSpeed)</label>
+                        <input 
+                            type="number" 
+                            v-model.number="config.video.minSpeed" 
+                            step="0.1" 
+                            min="0.25" 
+                            max="20.0"
+                        >
+                        <span class="help-text">當人最遠時的播放速度</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label>速度轉換時間 (transitionTime)</label>
+                        <input 
+                            type="number" 
+                            v-model.number="config.video.transitionTime" 
+                            step="100"
+                            min="0"
+                        >
+                        <span class="help-text">速度變化平滑過渡時間 (毫秒)</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" v-model="config.video.reverseMode">
+                            反向模式 (距離越近播放越慢)
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" v-model="config.video.loop">
+                            循環播放
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" v-model="config.video.muted">
+                            靜音
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" v-model="config.video.autoplay">
+                            自動播放
+                        </label>
+                    </div>
+
+                    <div class="preset-buttons">
+                        <h3>快速預設</h3>
+                        <button 
+                            v-for="preset in config.calibration.defaultPresets" 
+                            :key="preset.name"
+                            @click="applyPreset(preset)"
+                            class="btn btn-outline"
+                        >
+                            {{ preset.name }}
+                        </button>
+                    </div>
+                </section>
+
+                <!-- 距離偵測校準 -->
+                <section v-show="currentTab === 'distance'" class="panel">
+                    <h2>距離偵測校準</h2>
+                    
+                    <!-- 速度控制模式選擇 -->
+                    <div class="form-group" style="background: #f0f9ff; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                        <h3 style="margin-top: 0; color: #0369a1;">📈 速度控制模式</h3>
+                        <label class="checkbox-label">
+                            <input type="checkbox" v-model="config.speedInterpolation.enabled" @change="onModeChange">
+                            啟用三點插值模式
+                        </label>
+                        <span class="help-text">啟用後使用三個距離點進行線性插值,停用則使用傳統雙點線性模式</span>
+                    </div>
+
+                    <!-- 三點插值設定 -->
+                    <div v-show="config.speedInterpolation.enabled" style="background: #fefce8; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                        <h3 style="margin-top: 0; color: #ca8a04;">🎯 速度插值點設定</h3>
+                        <p class="help-text" style="margin-bottom: 15px;">
+                            設定三個距離點及對應播放速度,系統會根據偵測距離自動進行線性插值計算播放速度。<br>
+                            距離點必須由小到大排列,例如: 130cm (最近) → 150cm (中間) → 170cm (最遠)
+                        </p>
+
+                        <!-- 點 1: 最近距離 -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; padding: 10px; background: white; border-radius: 6px;">
+                            <div class="form-group" style="margin: 0;">
+                                <label style="color: #dc2626; font-weight: bold;">點 1 - 距離 (最近)</label>
+                                <input 
+                                    type="number" 
+                                    v-model.number="config.speedInterpolation.points[0].distance" 
+                                    step="5"
+                                    min="10"
+                                    max="1000"
+                                >
+                                <span class="help-text">最近距離點 (公分)</span>
+                            </div>
+                            <div class="form-group" style="margin: 0;">
+                                <label style="color: #dc2626; font-weight: bold;">點 1 - 速度</label>
+                                <input 
+                                    type="number" 
+                                    v-model.number="config.speedInterpolation.points[0].speed" 
+                                    step="0.1"
+                                    min="0.1"
+                                    max="20"
+                                >
+                                <span class="help-text">播放速度倍率 (通常最大)</span>
+                            </div>
+                        </div>
+
+                        <!-- 點 2: 中間距離 -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; padding: 10px; background: white; border-radius: 6px;">
+                            <div class="form-group" style="margin: 0;">
+                                <label style="color: #ea580c; font-weight: bold;">點 2 - 距離 (中間)</label>
+                                <input 
+                                    type="number" 
+                                    v-model.number="config.speedInterpolation.points[1].distance" 
+                                    step="5"
+                                    min="10"
+                                    max="1000"
+                                >
+                                <span class="help-text">中間距離點 (公分)</span>
+                            </div>
+                            <div class="form-group" style="margin: 0;">
+                                <label style="color: #ea580c; font-weight: bold;">點 2 - 速度</label>
+                                <input 
+                                    type="number" 
+                                    v-model.number="config.speedInterpolation.points[1].speed" 
+                                    step="0.1"
+                                    min="0.1"
+                                    max="20"
+                                >
+                                <span class="help-text">播放速度倍率 (中等速度)</span>
+                            </div>
+                        </div>
+
+                        <!-- 點 3: 最遠距離 -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 10px; padding: 10px; background: white; border-radius: 6px;">
+                            <div class="form-group" style="margin: 0;">
+                                <label style="color: #2563eb; font-weight: bold;">點 3 - 距離 (最遠)</label>
+                                <input 
+                                    type="number" 
+                                    v-model.number="config.speedInterpolation.points[2].distance" 
+                                    step="5"
+                                    min="10"
+                                    max="1000"
+                                >
+                                <span class="help-text">最遠距離點 (公分)</span>
+                            </div>
+                            <div class="form-group" style="margin: 0;">
+                                <label style="color: #2563eb; font-weight: bold;">點 3 - 速度</label>
+                                <input 
+                                    type="number" 
+                                    v-model.number="config.speedInterpolation.points[2].speed" 
+                                    step="0.1"
+                                    min="0.1"
+                                    max="20"
+                                >
+                                <span class="help-text">播放速度倍率 (通常最小)</span>
+                            </div>
+                        </div>
+
+                        <!-- 驗證提示 -->
+                        <div v-if="!validateInterpolationPoints()" class="info-box" style="background: #fef2f2; border-color: #dc2626; color: #991b1b; margin-top: 10px;">
+                            ⚠️ 警告: 距離點必須由小到大排列,請調整數值
+                        </div>
+                    </div>
+
+                    <!-- 傳統雙點模式設定 -->
+                    <div v-show="!config.speedInterpolation.enabled" style="background: #f3f4f6; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                        <h3 style="margin-top: 0; color: #4b5563;">📊 傳統雙點線性模式</h3>
+                        <p class="help-text" style="margin-bottom: 15px;">
+                            使用最小距離和最大距離兩個端點進行線性插值計算播放速度
+                        </p>
+
+                        <div class="form-group">
+                            <label>最小距離 (minDistance)</label>
+                            <input 
+                                type="number" 
+                                v-model.number="config.distance.minDistance" 
+                                step="10"
+                                min="30"
+                            >
+                            <span class="help-text">觸發最大速度的最近距離 (公分)</span>
+                        </div>
+
+                        <div class="form-group">
+                            <label>最大距離 (maxDistance)</label>
+                            <input 
+                                type="number" 
+                                v-model.number="config.distance.maxDistance" 
+                                step="10"
+                                min="100"
+                            >
+                            <span class="help-text">觸發基礎速度的最遠距離 (公分)</span>
+                        </div>
+                    </div>
+
+                    <hr style="margin: 30px 0; border: none; border-top: 2px solid #e5e7eb;">
+                    <h3 style="color: #374151;">⚙️ 進階偵測參數</h3>
+
+                    <div class="form-group">
+                        <label>距離變化閾值 (distanceThreshold)</label>
+                        <input 
+                            type="number" 
+                            v-model.number="config.distance.distanceThreshold" 
+                            step="1"
+                            min="1"
+                        >
+                        <span class="help-text">忽略小於此值的距離變化 (公分)</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label>平滑係數 (smoothingFactor)</label>
+                        <input 
+                            type="number" 
+                            v-model.number="config.distance.smoothingFactor" 
+                            step="0.05"
+                            min="0"
+                            max="1"
+                        >
+                        <span class="help-text">距離資料平滑處理強度 (0-1)</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label>啟動延遲 (activationDelay)</label>
+                        <input 
+                            type="number" 
+                            v-model.number="config.distance.activationDelay" 
+                            step="50"
+                            min="0"
+                        >
+                        <span class="help-text">偵測到人臉後延遲開始調整速度 (毫秒)</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label>停用延遲 (deactivationDelay)</label>
+                        <input 
+                            type="number" 
+                            v-model.number="config.distance.deactivationDelay" 
+                            step="50"
+                            min="0"
+                        >
+                        <span class="help-text">人臉消失後延遲開始回復速度 (毫秒)</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label>無人臉逾時 (noFaceTimeout)</label>
+                        <input 
+                            type="number" 
+                            v-model.number="config.distance.noFaceTimeout" 
+                            step="500"
+                            min="1000"
+                        >
+                        <span class="help-text">持續偵測不到人臉後回復基礎速度 (毫秒)</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" v-model="config.distance.closestPersonMode">
+                            多人時選取最近的人
+                        </label>
+                    </div>
+                </section>
+
+                <!-- 顯示模式控制 -->
+                <section v-show="currentTab === 'display'" class="panel">
+                    <h2>顯示模式控制</h2>
+                    
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" v-model="config.display.debugMode">
+                            除錯模式 (Debug Mode)
+                        </label>
+                        <span class="help-text">顯示所有即時狀態資訊</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" v-model="config.display.exhibitionMode">
+                            展覽模式 (Exhibition Mode)
+                        </label>
+                        <span class="help-text">全螢幕播放,隱藏所有 UI 元素</span>
+                    </div>
+
+                    <h3>除錯模式選項</h3>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" v-model="config.display.showSpeed">
+                            顯示播放速度
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" v-model="config.display.showDistance">
+                            顯示偵測距離
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" v-model="config.display.showFaceCount">
+                            顯示人臉數量
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" v-model="config.display.showFPS">
+                            顯示 FPS
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" v-model="config.display.showCameraPreview">
+                            顯示攝影機預覽
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label>游標隱藏延遲 (cursorHideDelay)</label>
+                        <input 
+                            type="number" 
+                            v-model.number="config.display.cursorHideDelay" 
+                            step="100"
+                            min="0"
+                        >
+                        <span class="help-text">無移動時游標消失時間 (毫秒)</span>
+                    </div>
+
+                    <div class="info-box">
+                        <p><strong>快捷鍵:</strong> 播放頁面按 Ctrl+Shift+D 切換除錯模式</p>
+                        <p><strong>快捷鍵:</strong> 播放頁面按 Ctrl+Shift+E 切換展覽模式</p>
+                    </div>
+                </section>
+
+                <!-- 影片管理 -->
+                <section v-show="currentTab === 'videos'" class="panel">
+                    <h2>影片管理</h2>
+                    
+                    <div class="upload-section">
+                        <h3>上傳影片</h3>
+                        <div class="upload-form">
+                            <input 
+                                type="file" 
+                                ref="fileInput"
+                                @change="onFileSelected"
+                                accept="video/mp4,video/webm,video/ogg"
+                            >
+                            <button 
+                                @click="uploadVideo" 
+                                :disabled="!selectedFile || uploading"
+                                class="btn btn-primary"
+                            >
+                                {{ uploading ? '上傳中...' : '上傳影片' }}
+                            </button>
+                        </div>
+                        <p class="help-text">支援格式: MP4, WebM, OGG (最大 500MB)</p>
+                        <p class="help-text">建議: WebM (VP9), 1920x1080, 5-8 Mbps</p>
+                    </div>
+
+                    <div class="video-list">
+                        <h3>影片列表</h3>
+                        <div v-if="videos.length === 0" class="empty-state">
+                            尚無影片
+                        </div>
+                        <div v-else class="video-items">
+                            <div 
+                                v-for="video in videos" 
+                                :key="video.filename"
+                                class="video-item"
+                                :class="{ active: video.filename === config.video.currentVideo }"
+                            >
+                                <div class="video-info">
+                                    <div class="video-name">{{ video.filename }}</div>
+                                    <div class="video-meta">
+                                        大小: {{ formatFileSize(video.size) }}
+                                    </div>
+                                </div>
+                                <div class="video-actions">
+                                    <button 
+                                        @click="setCurrentVideo(video.filename)"
+                                        class="btn btn-sm btn-primary"
+                                        :disabled="video.filename === config.video.currentVideo"
+                                    >
+                                        {{ video.filename === config.video.currentVideo ? '使用中' : '設為主影片' }}
+                                    </button>
+                                    <button 
+                                        @click="deleteVideo(video.filename)"
+                                        class="btn btn-sm btn-danger"
+                                        :disabled="video.filename === config.video.currentVideo"
+                                    >
+                                        刪除
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 操作按鈕 -->
+                <div class="action-bar">
+                    <button @click="resetConfig" class="btn btn-warning">重置為預設值</button>
+                    <button @click="saveConfig" class="btn btn-success">儲存所有設定</button>
+                </div>
+
+                <!-- 訊息提示 -->
+                <div v-if="message" :class="['message', message.type]">
+                    {{ message.text }}
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="/js/api-client.js"></script>
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    currentTab: 'video',
+                    config: {
+                        video: {
+                            currentVideo: '',
+                            baseSpeed: 1.0,
+                            maxSpeed: 10.0,
+                            minSpeed: 0.25,
+                            loop: true,
+                            muted: false,
+                            autoplay: true,
+                            transitionTime: 500,
+                            reverseMode: false,
+                            speedControlMode: 'interpolation'
+                        },
+                        speedInterpolation: {
+                            enabled: true,
+                            points: [
+                                { distance: 130, speed: 8.0 },
+                                { distance: 150, speed: 3.0 },
+                                { distance: 170, speed: 0.5 }
+                            ]
+                        },
+                        distance: {
+                            minDistance: 50,
+                            maxDistance: 500,
+                            closestPersonMode: true,
+                            distanceThreshold: 10,
+                            smoothingFactor: 0.3,
+                            activationDelay: 300,
+                            deactivationDelay: 1000,
+                            noFaceTimeout: 3000
+                        },
+                        display: {
+                            debugMode: false,
+                            showSpeed: true,
+                            showDistance: true,
+                            showFaceCount: true,
+                            showFPS: true,
+                            showCameraPreview: false,
+                            cursorHideDelay: 2000,
+                            exhibitionMode: false
+                        },
+                        calibration: { defaultPresets: [] }
+                    },
+                    videos: [],
+                    selectedFile: null,
+                    uploading: false,
+                    message: null
+                };
+            },
+            mounted() {
+                this.loadConfig();
+                this.loadVideos();
+            },
+            methods: {
+                async loadConfig() {
+                    try {
+                        const response = await apiClient.getConfig();
+                        this.config = response.data;
+                        this.showMessage('設定已載入', 'success');
+                    } catch (error) {
+                        this.showMessage('載入設定失敗: ' + error.message, 'error');
+                    }
+                },
+                async saveConfig() {
+                    try {
+                        // 驗證插值點順序
+                        if (this.config.speedInterpolation.enabled && !this.validateInterpolationPoints()) {
+                            this.showMessage('速度插值點距離必須由小到大排列', 'error');
+                            return;
+                        }
+
+                        const configToSave = {
+                            video: this.config.video,
+                            speedInterpolation: this.config.speedInterpolation,
+                            distance: this.config.distance,
+                            display: this.config.display
+                        };
+                        await apiClient.updateConfig(configToSave);
+                        this.showMessage('設定已儲存', 'success');
+                        await this.loadConfig();
+                    } catch (error) {
+                        this.showMessage('儲存設定失敗: ' + error.message, 'error');
+                    }
+                },
+                onModeChange() {
+                    // 切換模式時更新 speedControlMode
+                    this.config.video.speedControlMode = this.config.speedInterpolation.enabled ? 'interpolation' : 'linear';
+                    this.config.video.transitionTime = 0; // 確保即時切換
+                },
+                validateInterpolationPoints() {
+                    // 驗證三個點的距離是否遞增
+                    if (!this.config.speedInterpolation.points || this.config.speedInterpolation.points.length < 3) {
+                        return false;
+                    }
+                    const p1 = this.config.speedInterpolation.points[0].distance;
+                    const p2 = this.config.speedInterpolation.points[1].distance;
+                    const p3 = this.config.speedInterpolation.points[2].distance;
+                    return p1 < p2 && p2 < p3;
+                },
+                async resetConfig() {
+                    if (!confirm('確定要重置所有設定為預設值嗎？')) return;
+                    
+                    try {
+                        const response = await apiClient.resetConfig();
+                        this.config = response.data;
+                        this.showMessage('設定已重置', 'success');
+                    } catch (error) {
+                        this.showMessage('重置設定失敗: ' + error.message, 'error');
+                    }
+                },
+                async loadVideos() {
+                    try {
+                        const response = await apiClient.getVideoList();
+                        this.videos = response.data;
+                    } catch (error) {
+                        this.showMessage('載入影片列表失敗: ' + error.message, 'error');
+                    }
+                },
+                onFileSelected(event) {
+                    this.selectedFile = event.target.files[0];
+                },
+                async uploadVideo() {
+                    if (!this.selectedFile) return;
+
+                    this.uploading = true;
+                    try {
+                        await apiClient.uploadVideo(this.selectedFile);
+                        this.showMessage('影片上傳成功', 'success');
+                        this.selectedFile = null;
+                        this.$refs.fileInput.value = '';
+                        await this.loadVideos();
+                    } catch (error) {
+                        this.showMessage('上傳失敗: ' + error.message, 'error');
+                    } finally {
+                        this.uploading = false;
+                    }
+                },
+                async setCurrentVideo(filename) {
+                    try {
+                        await apiClient.setCurrentVideo(filename);
+                        this.config.video.currentVideo = filename;
+                        this.showMessage('當前影片已更新', 'success');
+                    } catch (error) {
+                        this.showMessage('設定失敗: ' + error.message, 'error');
+                    }
+                },
+                async deleteVideo(filename) {
+                    if (!confirm(`確定要刪除影片 "${filename}" 嗎？`)) return;
+
+                    try {
+                        await apiClient.deleteVideo(filename);
+                        this.showMessage('影片已刪除', 'success');
+                        await this.loadVideos();
+                        await this.loadConfig();
+                    } catch (error) {
+                        this.showMessage('刪除失敗: ' + error.message, 'error');
+                    }
+                },
+                applyPreset(preset) {
+                    this.config.video.baseSpeed = preset.baseSpeed;
+                    this.config.video.maxSpeed = preset.maxSpeed;
+                    this.config.distance.minDistance = preset.minDistance;
+                    this.config.distance.maxDistance = preset.maxDistance;
+                    this.showMessage(`已套用預設: ${preset.name}`, 'info');
+                },
+                formatFileSize(bytes) {
+                    if (bytes < 1024) return bytes + ' B';
+                    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+                    return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+                },
+                showMessage(text, type = 'info') {
+                    this.message = { text, type };
+                    setTimeout(() => {
+                        this.message = null;
+                    }, 3000);
+                }
+            }
+        }).mount('#admin-app');
+    </script>
+</body>
+</html>

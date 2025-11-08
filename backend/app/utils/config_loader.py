@@ -77,15 +77,20 @@ def get_model_path() -> Path:
     sensor_config = load_sensor_config()
     model_filename = sensor_config["model"]["model_path"]
     
-    # 優先在 models 目錄尋找
+    # 優先在 models 目錄尋找 (專案根目錄下的 models/)
     model_path = BASE_DIR.parent / "models" / model_filename
     if model_path.exists():
         return model_path
     
-    # 兼容舊路徑:專案根目錄
-    alt_path = BASE_DIR / model_filename
-    if alt_path.exists():
-        return alt_path
+    # 兼容: 專案根目錄 (repo root)
+    root_path = BASE_DIR.parent / model_filename
+    if root_path.exists():
+        return root_path
+    
+    # 兼容舊路徑: backend 目錄下
+    backend_path = BASE_DIR / model_filename
+    if backend_path.exists():
+        return backend_path
     
     # 兼容舊路徑:基本偵測資料夾
     tools_path = BASE_DIR.parent / "tools" / "基本偵測" / model_filename

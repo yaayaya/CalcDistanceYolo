@@ -5,7 +5,7 @@ Pydantic 資料模型定義
 """
 
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Any
 from datetime import datetime
 
 
@@ -46,5 +46,5 @@ class ApiResponse(BaseModel):
     """標準 API 回應格式"""
     status: str = Field("success", description="狀態: success/error")
     message: Optional[str] = Field(None, description="訊息")
-    data: Optional[dict] = Field(None, description="回傳資料")
+    data: Optional[Any] = Field(None, description="回傳資料")
     timestamp: float = Field(default_factory=lambda: datetime.now().timestamp(), description="回應時間戳記")

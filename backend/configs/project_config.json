@@ -1,0 +1,83 @@
+{
+  "video": {
+    "currentVideo": "草地四季影片.mp4",
+    "baseSpeed": 1,
+    "maxSpeed": 10,
+    "minSpeed": 0.1,
+    "loop": true,
+    "muted": true,
+    "autoplay": true,
+    "transitionTime": 0,
+    "reverseMode": false,
+    "speedControlMode": "interpolation"
+  },
+  "speedInterpolation": {
+    "enabled": true,
+    "points": [
+      {
+        "distance": 130,
+        "speed": 10
+      },
+      {
+        "distance": 150,
+        "speed": 2.5
+      },
+      {
+        "distance": 170,
+        "speed": 0.1
+      }
+    ]
+  },
+  "distance": {
+    "minDistance": 130,
+    "maxDistance": 170,
+    "closestPersonMode": true,
+    "distanceThreshold": 3,
+    "smoothingFactor": 1,
+    "activationDelay": 75,
+    "deactivationDelay": 1000,
+    "noFaceTimeout": 3000
+  },
+  "display": {
+    "debugMode": true,
+    "showSpeed": true,
+    "showDistance": true,
+    "showFaceCount": true,
+    "showFPS": true,
+    "showCameraPreview": false,
+    "cursorHideDelay": 2000,
+    "exhibitionMode": false
+  },
+  "calibration": {
+    "defaultPresets": [
+      {
+        "name": "正常模式",
+        "baseSpeed": 1.0,
+        "maxSpeed": 10.0,
+        "minDistance": 50,
+        "maxDistance": 500
+      },
+      {
+        "name": "快速模式",
+        "baseSpeed": 2.0,
+        "maxSpeed": 15.0,
+        "minDistance": 50,
+        "maxDistance": 400
+      },
+      {
+        "name": "慢速模式",
+        "baseSpeed": 0.5,
+        "maxSpeed": 5.0,
+        "minDistance": 100,
+        "maxDistance": 600
+      },
+      {
+        "name": "展示模式",
+        "baseSpeed": 1.0,
+        "maxSpeed": 8.0,
+        "minDistance": 80,
+        "maxDistance": 450
+      }
+    ]
+  }
+}
