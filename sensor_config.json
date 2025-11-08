@@ -1,0 +1,44 @@
+{
+  "model": {
+    "model_path": "yolo11n.pt",
+    "imgsz": 416,
+    "conf": 0.5,
+    "iou": 0.5,
+    "device": "cpu",
+    "vid_stride": 3,
+    "tracker": "botsort.yaml"
+  },
+  "distance": {
+    "focal_length": 600,
+    "real_person_height": 170,
+    "use_adaptive_height": true,
+    "use_smoothing": true,
+    "use_display_smoothing": true,
+    "smoothing_window": 5,
+    "display_smooth_factor": 0.3,
+    "standing_ratio": 2.5,
+    "sitting_height_factor": 0.6,
+    "crouching_height_factor": 0.75
+  },
+  "camera": {
+    "source": 0,
+    "width": 640,
+    "height": 480
+  },
+  "performance": {
+    "use_fps_limit": false,
+    "target_fps": 20
+  },
+  "runtime": {
+    "max_runtime_hours": 8,
+    "health_check_interval": 300,
+    "auto_reconnect": true,
+    "max_consecutive_errors": 50
+  },
+  "output": {
+    "show": true,
+    "save_video": false,
+    "output_path": "output.mp4",
+    "save_txt": false
+  }
+}

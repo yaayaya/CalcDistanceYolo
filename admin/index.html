@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YOLO11 距離偵測系統 - 管理後台</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 標題 -->
+        <header>
+            <h1>📹 YOLO11 距離偵測系統</h1>
+            <p class="subtitle">管理後台監控介面 v1.0</p>
+        </header>
+
+        <!-- 即時監控區 -->
+        <section class="monitor-section">
+            <h2>📊 即時監控</h2>
+            
+            <div class="status-grid">
+                <!-- 偵測人數 -->
+                <div class="status-card">
+                    <div class="status-icon">👥</div>
+                    <div class="status-label">偵測人數</div>
+                    <div class="status-value" id="total-count">-</div>
+                </div>
+
+                <!-- 最近距離 -->
+                <div class="status-card">
+                    <div class="status-icon">📏</div>
+                    <div class="status-label">最近距離</div>
+                    <div class="status-value" id="closest-distance">-</div>
+                    <div class="status-unit">cm</div>
+                </div>
+
+                <!-- FPS -->
+                <div class="status-card">
+                    <div class="status-icon">⚡</div>
+                    <div class="status-label">FPS (目標/實際)</div>
+                    <div class="status-value" id="fps-value">-</div>
+                </div>
+
+                <!-- 運行時間 -->
+                <div class="status-card">
+                    <div class="status-icon">⏱️</div>
+                    <div class="status-label">運行時間</div>
+                    <div class="status-value" id="uptime">-</div>
+                </div>
+            </div>
+
+            <!-- 連線狀態 -->
+            <div class="connection-status" id="connection-status">
+                <span class="status-dot"></span>
+                <span id="status-text">未連線</span>
+            </div>
+        </section>
+
+        <!-- 網路設定區 -->
+        <section class="config-section">
+            <h2>⚙️ 網路設定</h2>
+            
+            <form id="network-config-form" class="config-form">
+                <div class="form-group">
+                    <label for="broadcast-interval">廣播間隔 (毫秒):</label>
+                    <input type="number" id="broadcast-interval" name="broadcast_interval" 
+                           min="16" max="1000" value="33">
+                    <small>建議: 33ms (約30 FPS)</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="websocket-host">WebSocket 主機:</label>
+                    <input type="text" id="websocket-host" name="host" 
+                           value="0.0.0.0" readonly>
+                    <small>本地執行固定為 0.0.0.0</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="websocket-port">WebSocket 埠號:</label>
+                    <input type="number" id="websocket-port" name="port" 
+                           min="1000" max="65535" value="8000" readonly>
+                    <small>修改需重啟服務</small>
+                </div>
+
+                <button type="submit" class="btn btn-primary">💾 儲存設定</button>
+            </form>
+
+            <div class="config-note">
+                <strong>注意:</strong> 修改設定後需手動刷新連線才會生效
+            </div>
+        </section>
+
+        <!-- 控制區 -->
+        <section class="control-section">
+            <h2>🎛️ 控制面板</h2>
+            
+            <div class="button-group">
+                <button id="btn-refresh-connection" class="btn btn-success">
+                    🔄 刷新 WebSocket 連線
+                </button>
+                
+                <button id="btn-reload-detector" class="btn btn-warning">
+                    🔁 重啟偵測器
+                </button>
+
+                <button id="btn-view-docs" class="btn btn-info">
+                    📖 查看 API 文件
+                </button>
+            </div>
+
+            <div class="info-box">
+                <p><strong>刷新連線:</strong> 重新建立 WebSocket,套用新的網路設定</p>
+                <p><strong>重啟偵測器:</strong> 重新載入 sensor_config.json 配置 (使用 GUI 工具調整)</p>
+            </div>
+        </section>
+
+        <!-- 頁尾 -->
+        <footer>
+            <p>YOLO11 Distance Detection System | © 2025</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
