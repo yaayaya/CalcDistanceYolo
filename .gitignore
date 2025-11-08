@@ -1,0 +1,165 @@
+############################
+# Python Bytecode / Cache  #
+############################
+__pycache__/
+*.py[cod]
+*$py.class
+
+############################
+# Virtual Environments      #
+############################
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.env.*
+*.env
+
+############################
+# Packaging / Build        #
+############################
+build/
+dist/
+downloads/
+eggs/
+.eggs/
+*.egg-info/
+*.egg
+lib/
+lib64/
+parts/
+sdist/
+var/
+target/
+
+############################
+# Logs / Reports           #
+############################
+logs/
+*.log
+pip-log.txt
+pip-delete-this-directory.txt
+coverage.xml
+htmlcov/
+.coverage
+.coverage.*
+*.cover
+*.py,cover
+.pytest_cache/
+.hypothesis/
+.tox/
+.nox/
+
+############################
+# Jupyter / IPython        #
+############################
+.ipynb_checkpoints/
+profile_default/
+ipython_config.py
+
+############################
+# Editors / IDE            #
+############################
+.vscode/
+*.code-workspace
+*~
+
+############################
+# Node / Frontend          #
+############################
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-lock.yaml
+
+############################
+# Frontend build outputs   #
+admin/dist/
+frontend/dist/
+admin/*.min.js
+admin/*.min.css
+
+############################
+# Cache / Temp             #
+############################
+.cache/
+temp/
+tmp/
+
+############################
+# OS / Misc                #
+############################
+.DS_Store
+Thumbs.db
+
+############################
+# Data / Outputs           #
+############################
+outputs/
+results/
+captures/
+
+############################
+# Model / Large Weights    #
+############################
+# 若需要版本控制模型權重，請刪除以下規則
+*.pt
+*.onnx
+*.engine
+
+############################
+# Local Config (secrets?)  #
+############################
+config.json
+sensor_config.json
+configs/*.json
+
+############################
+# SQLite / DB              #
+############################
+*.sqlite3
+*.db
+*.db-journal
+
+############################
+# PyInstaller / Manifest   #
+############################
+*.spec
+*.manifest
+
+############################
+# Environment Indicators   #
+############################
+.python-version
+Pipfile.lock
+poetry.lock
+__pypackages__/
+
+############################
+# Profiling                #
+############################
+*.prof
+*.pstats
+
+############################
+# Fonts (built)            #
+############################
+*.woff
+*.woff2
+
+############################
+# Security                 #
+############################
+*.pem
+*.key
+*.crt
+*.cert
+
+############################
+# Ignore generated MD if needed (uncomment) #
+# README_generated.md
+
