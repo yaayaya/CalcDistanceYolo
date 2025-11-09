@@ -5,6 +5,7 @@ YOLO11 距離偵測 FastAPI 主應用
 """
 
 import os
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -17,6 +18,10 @@ from app.api import websocket, frontend
 
 # 解決 OpenMP 函式庫衝突問題
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+
+# 計算專案根目錄
+BASE_DIR = Path(__file__).resolve().parent.parent
+FRONTEND_DIR = BASE_DIR / "frontend"
 
 
 # 全域服務實例
@@ -75,9 +80,9 @@ app.include_router(websocket.router)
 app.include_router(frontend.router)
 
 
-# === 靜態檔案服務 ===
+# === 静態檔案服務 ===
 # 後台管理介面
-app.mount("/admin", StaticFiles(directory="../frontend", html=True), name="admin")
+app.mount("/admin", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="admin")
 
 # Flur 頁面服務
 from fastapi.responses import FileResponse
@@ -85,12 +90,12 @@ from fastapi.responses import FileResponse
 @app.get("/flur")
 async def flur_page():
     """FlurPaint 互動藝術裝置展示頁面"""
-    return FileResponse("../frontend/flur.html")
+    return FileResponse(str(FRONTEND_DIR / "flur.html"))
 
 @app.get("/flur-admin")
 async def flur_admin_page():
     """FlurPaint 後台管理頁面"""
-    return FileResponse("../frontend/flur_admin.html")
+    return FileResponse(str(FRONTEND_DIR / "flur_admin.html"))
 
 
 # === 根路徑 ===

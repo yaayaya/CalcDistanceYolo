@@ -326,32 +326,215 @@ class YOLODetectorService:
         
         print("🔄 配置已重新載入")
     
-    def encode_frame_to_base64(self, frame: np.ndarray, quality: int = 85) -> str:
+    def calculate_target_resolution(self, distance: float) -> tuple:
+        """
+        根據距離計算目標解析度
+        
+        Args:
+            distance: 偵測到的距離 (cm)
+            
+        Returns:
+            (width, height) 元組
+        """
+        blur_config = self.project_config.get("blur_control", {})
+        distance_config = self.project_config.get("distance_mapping", {})
+        
+        min_width = blur_config.get("min_resolution_width", 320)
+        max_width = blur_config.get("max_resolution_width", 1920)
+        min_distance = distance_config.get("min_distance", 50)
+        max_distance = distance_config.get("max_distance", 500)
+        
+        # 如果沒有偵測到人 (distance = 0),使用最大解析度
+        if distance == 0:
+            width = max_width
+        else:
+            # 限制距離在範圍內
+            clamped_dist = max(min_distance, min(max_distance, distance))
+            
+            # 線性映射 (距離越近,解析度越低)
+            ratio = (clamped_dist - min_distance) / (max_distance - min_distance)
+            width = int(min_width + ratio * (max_width - min_width))
+        
+        # 保持 16:9 比例
+        height = int(width * 9 / 16)
+        
+        # 確保是偶數 (某些編碼器要求)
+        width = width - (width % 2)
+        height = height - (height % 2)
+        
+        return (width, height)
+    
+    def calculate_target_quality(self, distance: float) -> int:
+        """
+        根據距離計算 JPEG 品質
+        距雩越近，品質越低；距雩越遠，品質越高
+        
+        Args:
+            distance: 偵測到的距離 (cm)
+            
+        Returns:
+            JPEG 品質 (1-100)
+        """
+        streaming_config = self.project_config.get("flur_streaming", {})
+        distance_config = self.project_config.get("distance_mapping", {})
+        
+        min_quality = streaming_config.get("min_jpeg_quality", 30)
+        max_quality = streaming_config.get("max_jpeg_quality", 85)
+        min_distance = distance_config.get("min_distance", 50)
+        max_distance = distance_config.get("max_distance", 500)
+        
+        # 如果沒有偵測到人 (distance = 0),使用最高品質
+        if distance == 0:
+            return max_quality
+        
+        # 限制距離在範圍內
+        clamped_dist = max(min_distance, min(max_distance, distance))
+        
+        # 線性映射 (距離越近,品質越低)
+        ratio = (clamped_dist - min_distance) / (max_distance - min_distance)
+        quality = int(min_quality + ratio * (max_quality - min_quality))
+        
+        # 限制在 1-100 範圍
+        return max(1, min(100, quality))
+    
+    def resize_frame(self, frame: np.ndarray, target_size: tuple) -> Optional[np.ndarray]:
+        """
+        調整影像尺寸
+        
+        Args:
+            frame: 原始影像
+            target_size: 目標尺寸 (width, height)
+            
+        Returns:
+            調整後的影像，若失敗則返回 None
+        """
+        try:
+            # 驗證輸入
+            if frame is None or frame.size == 0:
+                print("⚠ resize_frame: 影像為空")
+                return None
+            
+            if not isinstance(target_size, tuple) or len(target_size) != 2:
+                print(f"⚠ resize_frame: 無效的目標尺寸 {target_size}")
+                return None
+            
+            width, height = target_size
+            if width <= 0 or height <= 0 or width > 4096 or height > 4096:
+                print(f"⚠ resize_frame: 尺寸超出範圍 {width}x{height}")
+                return None
+            
+            # 執行縮放
+            return cv2.resize(frame, target_size, interpolation=cv2.INTER_AREA)
+            
+        except Exception as e:
+            print(f"❌ resize_frame 錯誤: {e}")
+            return None
+    
+    def encode_frame_to_base64(self, frame: np.ndarray, quality: int = 70) -> Optional[str]:
         """
         將影像幀編碼為 Base64 字串
         
         Args:
             frame: OpenCV 影像 (numpy array)
-            quality: JPEG 壓縮品質 (1-100)
+            quality: JPEG 壓縮品質 (1-100)，預設降低到 70 以提升速度
             
         Returns:
-            Base64 編碼的 JPEG 影像字串
+            Base64 編碼的 JPEG 影像字串，若失敗則返回 None
         """
-        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
-        _, buffer = cv2.imencode('.jpg', frame, encode_param)
-        return base64.b64encode(buffer).decode('utf-8')
+        try:
+            if frame is None or frame.size == 0:
+                print("⚠ encode_frame_to_base64: 影像為空")
+                return None
+            
+            # 限制品質範圍
+            quality = max(1, min(100, quality))
+            
+            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
+            success, buffer = cv2.imencode('.jpg', frame, encode_param)
+            
+            if not success:
+                print("⚠ encode_frame_to_base64: JPEG 編碼失敗")
+                return None
+            
+            return base64.b64encode(buffer).decode('utf-8')
+            
+        except Exception as e:
+            print(f"❌ encode_frame_to_base64 錯誤: {e}")
+            return None
     
-    def get_current_frame_base64(self, quality: int = 85) -> Optional[str]:
+    def get_current_frame_base64(self, quality: int = 70, target_resolution: Optional[tuple] = None) -> Optional[str]:
         """
         取得當前影像幀的 Base64 編碼
         
         Args:
             quality: JPEG 壓縮品質 (1-100)
+            target_resolution: 目標解析度 (width, height)，若為 None 則使用原始解析度
             
         Returns:
             Base64 編碼的影像,若無影像則返回 None
         """
-        if self.current_frame is None:
+        try:
+            if self.current_frame is None:
+                return None
+            
+            frame = self.current_frame
+            
+            # 如果指定了目標解析度，先縮放影像
+            if target_resolution is not None:
+                frame = self.resize_frame(frame, target_resolution)
+                if frame is None:
+                    return None
+            
+            return self.encode_frame_to_base64(frame, quality)
+            
+        except Exception as e:
+            print(f"❌ get_current_frame_base64 錯誤: {e}")
             return None
+    
+    def get_frame_with_resolution(self, distance: float, quality: Optional[int] = None, enable_dynamic_quality: bool = False) -> Optional[Dict[str, Any]]:
+        """
+        根據距離取得動態解析度的影像幀
         
-        return self.encode_frame_to_base64(self.current_frame, quality)
+        Args:
+            distance: 偵測距離 (cm)
+            quality: JPEG 壓縮品質 (1-100)，若為 None 且 enable_dynamic_quality=True 則自動計算
+            enable_dynamic_quality: 是否啟用動態品質
+            
+        Returns:
+            包含影像和解析度資訊的字典，若無影像則返回 None
+        """
+        try:
+            if self.current_frame is None:
+                return None
+            
+            # 計算目標解析度
+            target_resolution = self.calculate_target_resolution(distance)
+            
+            # 計算 JPEG 品質
+            if enable_dynamic_quality and quality is None:
+                target_quality = self.calculate_target_quality(distance)
+            else:
+                target_quality = quality if quality is not None else 70
+            
+            # 調整影像尺寸
+            resized_frame = self.resize_frame(self.current_frame, target_resolution)
+            
+            if resized_frame is None:
+                print("⚠ get_frame_with_resolution: 影像縮放失敗")
+                return None
+            
+            # 編碼為 Base64
+            frame_base64 = self.encode_frame_to_base64(resized_frame, target_quality)
+            
+            return {
+                "image": frame_base64,
+                "resolution": {
+                    "width": target_resolution[0],
+                    "height": target_resolution[1]
+                },
+                "quality": target_quality
+            }
+            
+        except Exception as e:
+            print(f"❌ get_frame_with_resolution 錯誤: {e}")
+            return None

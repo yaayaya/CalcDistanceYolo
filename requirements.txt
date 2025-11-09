@@ -10,6 +10,7 @@ ultralytics==8.1.0
 opencv-python==4.9.0.80
 numpy==1.26.3
 Pillow==10.2.0
+lapx>=0.5.2
 
 # 工具套件
 python-dotenv==1.0.0

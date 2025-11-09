@@ -668,6 +668,14 @@ class YOLO11DistanceDetectorGUI:
     def load_model(self):
         """載入 YOLO 模型"""
         try:
+            # 設定 PyTorch 2.6+ 相容性
+            import torch.serialization
+            try:
+                from ultralytics.nn.tasks import DetectionModel
+                torch.serialization.add_safe_globals([DetectionModel])
+            except:
+                pass
+            
             model_path = self.config["model"]["model_path"]
             device = self.config["model"].get("device", "cpu")
             self.update_status(f"正在載入模型: {model_path} (裝置: {device})")

@@ -81,7 +81,8 @@
         }
 
         .form-group input[type="number"],
-        .form-group select {
+        .form-group select,
+        .form-group input[type="color"] {
             width: 100%;
             padding: 12px;
             border: 2px solid #e2e8f0;
@@ -90,8 +91,14 @@
             transition: border-color 0.3s;
         }
 
+        .form-group input[type="color"] {
+            height: 50px;
+            cursor: pointer;
+        }
+
         .form-group input[type="number"]:focus,
-        .form-group select:focus {
+        .form-group select:focus,
+        .form-group input[type="color"]:focus {
             outline: none;
             border-color: #667eea;
         }
@@ -364,6 +371,58 @@
                 </div>
             </section>
 
+            <!-- 串流效能設定 -->
+            <section class="section">
+                <h2>🚀 串流效能設定</h2>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="jpeg-quality">JPEG 壓縮品質 (固定值)</label>
+                        <input type="number" id="jpeg-quality" min="10" max="100" step="5">
+                        <small>影像壓縮品質 (10-100)，僅當關閉動態品質時使用</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="min-jpeg-quality">最低 JPEG 品質</label>
+                        <input type="number" id="min-jpeg-quality" min="1" max="100" step="5">
+                        <small>最近距離時的品質（距離越近品質越低）</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="max-jpeg-quality">最高 JPEG 品質</label>
+                        <input type="number" id="max-jpeg-quality" min="1" max="100" step="5">
+                        <small>最遠距離時的品質（距離越遠品質越高）</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="enable-dynamic-quality">
+                            <span>啟用動態 JPEG 品質</span>
+                        </label>
+                        <small>根據距離自動調整品質，進一步提升 FPS</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="max-fps">最大 FPS</label>
+                        <input type="number" id="max-fps" min="10" max="60" step="5">
+                        <small>串流最大幀率限制</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="frame-skip">跳幀數</label>
+                        <input type="number" id="frame-skip" min="1" max="10" step="1">
+                        <small>每隔多少幀傳送一次 (1=不跳幀)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="enable-dynamic-resolution">
+                            <span>啟用動態解析度</span>
+                        </label>
+                        <small>關閉後將固定使用最高解析度</small>
+                    </div>
+                </div>
+            </section>
+
             <!-- YOLO 設備選擇 -->
             <section class="section">
                 <h2>⚙️ YOLO 推論設備</h2>
@@ -414,6 +473,100 @@
                         <input type="checkbox" id="show-distance">
                         <span>顯示距離資訊</span>
                     </label>
+                </div>
+            </section>
+
+            <!-- 模糊圖層設定 -->
+            <section class="section">
+                <h2>🎨 模糊圖層效果</h2>
+                
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="blur-overlay-enabled">
+                        <span>啟用模糊圖層 (柔化低解析度畫面)</span>
+                    </label>
+                    <small>在低解析度時疊加半透明模糊圖層，消除馬賽克感</small>
+                </div>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="blur-min-distance">觸發最小距離 (cm)</label>
+                        <input type="number" id="blur-min-distance" min="10" max="200" step="5">
+                        <small>此距離時模糊效果最強</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="blur-max-distance">觸發最大距離 (cm)</label>
+                        <input type="number" id="blur-max-distance" min="200" max="1000" step="10">
+                        <small>此距離時模糊效果消失</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="min-blur-radius">最小模糊半徑 (px)</label>
+                        <input type="number" id="min-blur-radius" min="0" max="5" step="0.5">
+                        <small>最遠距離時的模糊程度</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="max-blur-radius">最大模糊半徑 (px)</label>
+                        <input type="number" id="max-blur-radius" min="0" max="20" step="0.5">
+                        <small>最近距離時的模糊程度 (建議 5-12)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="min-opacity">最小透明度</label>
+                        <input type="number" id="min-opacity" min="0" max="1" step="0.05">
+                        <small>最遠距離時的圖層透明度 (0-1)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="max-opacity">最大透明度</label>
+                        <input type="number" id="max-opacity" min="0" max="1" step="0.05">
+                        <small>最近距離時的圖層透明度 (建議 0.2-0.4)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="overlay-color">圖層顏色</label>
+                        <input type="color" id="overlay-color">
+                        <small>模糊圖層的顏色 (建議使用中性灰)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="blur-easing">緩動函數</label>
+                        <select id="blur-easing">
+                            <option value="linear">線性 (Linear)</option>
+                            <option value="ease-in">緩入 (Ease In)</option>
+                            <option value="ease-out">緩出 (Ease Out)</option>
+                            <option value="ease-in-out">緩入緩出 (Ease In-Out)</option>
+                        </select>
+                        <small>模糊效果隨距離變化的曲線</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="layer-count">圖層數量</label>
+                        <input type="number" id="layer-count" min="1" max="10" step="1">
+                        <small>多層繪製增強柔和效果 (建議 3-5)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="blend-mode">混合模式</label>
+                        <select id="blend-mode">
+                            <option value="normal">正常 (Normal)</option>
+                            <option value="multiply">色彩增值 (Multiply)</option>
+                            <option value="screen">濾色 (Screen)</option>
+                            <option value="overlay">覆蓋 (Overlay)</option>
+                            <option value="soft-light">柔光 (Soft Light)</option>
+                        </select>
+                        <small>圖層與原圖的混合方式</small>
+                    </div>
+                </div>
+
+                <div class="device-info">
+                    <h3>💡 參數調整建議</h3>
+                    <p><strong>自然柔焦:</strong> 模糊半徑 6-8px，透明度 0.2-0.3，圖層數 3</p>
+                    <p><strong>強烈效果:</strong> 模糊半徑 10-15px，透明度 0.3-0.5，圖層數 5</p>
+                    <p><strong>效能優先:</strong> 模糊半徑 3-5px，透明度 0.15-0.25，圖層數 2</p>
+                    <p><strong>注意:</strong> 模糊半徑和圖層數量會影響效能，請根據裝置調整</p>
                 </div>
             </section>
 
@@ -481,6 +634,16 @@
             document.getElementById('max-distance').value = config.distance_mapping.max_distance;
             document.getElementById('easing-function').value = config.distance_mapping.easing_function;
 
+            // 串流效能設定
+            const streamingConfig = config.flur_streaming || {};
+            document.getElementById('jpeg-quality').value = streamingConfig.jpeg_quality || 70;
+            document.getElementById('min-jpeg-quality').value = streamingConfig.min_jpeg_quality || 30;
+            document.getElementById('max-jpeg-quality').value = streamingConfig.max_jpeg_quality || 85;
+            document.getElementById('enable-dynamic-quality').checked = streamingConfig.enable_dynamic_quality || false;
+            document.getElementById('max-fps').value = streamingConfig.max_fps || 30;
+            document.getElementById('frame-skip').value = streamingConfig.frame_skip || 1;
+            document.getElementById('enable-dynamic-resolution').checked = streamingConfig.enable_dynamic_resolution !== false;
+
             // YOLO 設備
             document.getElementById('yolo-device').value = config.yolo_device.device;
             updateDeviceDescription();
@@ -490,6 +653,20 @@
             document.getElementById('exhibition-mode').checked = config.display.exhibition_mode;
             document.getElementById('show-fps').checked = config.display.show_fps;
             document.getElementById('show-distance').checked = config.display.show_distance;
+
+            // 模糊圖層設定
+            const blurOverlay = config.blur_overlay || {};
+            document.getElementById('blur-overlay-enabled').checked = blurOverlay.enabled !== false;
+            document.getElementById('blur-min-distance').value = blurOverlay.min_distance || 70;
+            document.getElementById('blur-max-distance').value = blurOverlay.max_distance || 120;
+            document.getElementById('min-blur-radius').value = blurOverlay.min_blur_radius || 0;
+            document.getElementById('max-blur-radius').value = blurOverlay.max_blur_radius || 8;
+            document.getElementById('min-opacity').value = blurOverlay.min_opacity || 0;
+            document.getElementById('max-opacity').value = blurOverlay.max_opacity || 0.3;
+            document.getElementById('overlay-color').value = blurOverlay.overlay_color || '#888888';
+            document.getElementById('blur-easing').value = blurOverlay.easing_function || 'ease-out';
+            document.getElementById('layer-count').value = blurOverlay.layer_count || 3;
+            document.getElementById('blend-mode').value = blurOverlay.blend_mode || 'normal';
         }
 
         // 儲存配置
@@ -512,6 +689,15 @@
                         max_distance: parseInt(document.getElementById('max-distance').value),
                         easing_function: document.getElementById('easing-function').value
                     },
+                    flur_streaming: {
+                        jpeg_quality: parseInt(document.getElementById('jpeg-quality').value),
+                        min_jpeg_quality: parseInt(document.getElementById('min-jpeg-quality').value),
+                        max_jpeg_quality: parseInt(document.getElementById('max-jpeg-quality').value),
+                        enable_dynamic_quality: document.getElementById('enable-dynamic-quality').checked,
+                        max_fps: parseInt(document.getElementById('max-fps').value),
+                        frame_skip: parseInt(document.getElementById('frame-skip').value),
+                        enable_dynamic_resolution: document.getElementById('enable-dynamic-resolution').checked
+                    },
                     yolo_device: {
                         device: document.getElementById('yolo-device').value,
                         available_devices: config.yolo_device.available_devices,
@@ -522,6 +708,19 @@
                         exhibition_mode: document.getElementById('exhibition-mode').checked,
                         show_fps: document.getElementById('show-fps').checked,
                         show_distance: document.getElementById('show-distance').checked
+                    },
+                    blur_overlay: {
+                        enabled: document.getElementById('blur-overlay-enabled').checked,
+                        min_distance: parseInt(document.getElementById('blur-min-distance').value),
+                        max_distance: parseInt(document.getElementById('blur-max-distance').value),
+                        min_blur_radius: parseFloat(document.getElementById('min-blur-radius').value),
+                        max_blur_radius: parseFloat(document.getElementById('max-blur-radius').value),
+                        min_opacity: parseFloat(document.getElementById('min-opacity').value),
+                        max_opacity: parseFloat(document.getElementById('max-opacity').value),
+                        overlay_color: document.getElementById('overlay-color').value,
+                        easing_function: document.getElementById('blur-easing').value,
+                        layer_count: parseInt(document.getElementById('layer-count').value),
+                        blend_mode: document.getElementById('blend-mode').value
                     }
                 };
 

@@ -15,22 +15,35 @@
             background: #000;
             overflow: hidden;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
         }
 
         #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
             width: 100vw;
             height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
             background: #000;
+            overflow: hidden;
         }
 
         #display-canvas {
-            max-width: 100%;
-            max-height: 100%;
-            image-rendering: pixelated; /* 保持像素化效果 */
-            transition: filter 0.3s ease;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw !important;
+            height: 100vh !important;
+            object-fit: cover; /* 填滿整個螢幕，避免黑邊和跳動 */
+            image-rendering: pixelated; /* 低解析度時保持像素化效果 */
+            transform: translateZ(0); /* 啟用 GPU 加速，減少抖動 */
+            will-change: auto; /* 避免過度優化導致的問題 */
         }
 
         /* 除錯資訊覆蓋層 */
@@ -172,6 +185,18 @@
             <span class="debug-label">FPS:</span>
             <span class="debug-value" id="debug-fps">--</span>
         </div>
+        <div class="debug-item">
+            <span class="debug-label">JPEG 品質:</span>
+            <span class="debug-value" id="debug-quality">--</span>
+        </div>
+        <div class="debug-item">
+            <span class="debug-label">模糊半徑:</span>
+            <span class="debug-value" id="debug-blur">--</span>
+        </div>
+        <div class="debug-item">
+            <span class="debug-label">圖層透明度:</span>
+            <span class="debug-value" id="debug-opacity">--</span>
+        </div>
     </div>
 
     <!-- 連線狀態指示器 -->
@@ -189,10 +214,13 @@
         let canvas = null;
         let ctx = null;
         
-        // 解析度控制
-        let targetResolution = { width: 1920, height: 1080 };
+        // 當前影像解析度 (從後端接收)
         let currentResolution = { width: 1920, height: 1080 };
-        let transitionProgress = 1.0;
+        
+        // 當前距離與模糊參數
+        let currentDistance = 0;
+        let currentBlurRadius = 0;
+        let currentOpacity = 0;
         
         // FPS 計算
         let frameCount = 0;
@@ -213,11 +241,8 @@
             // 建立 WebSocket 連線
             connectWebSocket();
             
-            // 綁定熱鍵
+            // 繫定熱鍵
             bindHotkeys();
-            
-            // 啟動動畫迴圈
-            requestAnimationFrame(animationLoop);
         });
 
         // ===== 載入配置 =====
@@ -261,6 +286,19 @@
                     exhibition_mode: true,
                     show_fps: false,
                     show_distance: false
+                },
+                blur_overlay: {
+                    enabled: true,
+                    min_distance: 70,
+                    max_distance: 120,
+                    min_blur_radius: 0,
+                    max_blur_radius: 8,
+                    min_opacity: 0,
+                    max_opacity: 0.3,
+                    overlay_color: "#888888",
+                    easing_function: "ease-out",
+                    layer_count: 3,
+                    blend_mode: "normal"
                 }
             };
         }
@@ -328,14 +366,22 @@
         function handleFrameData(data) {
             if (data.type !== 'frame_data') return;
             
-            // 計算目標解析度
-            const distance = data.distance || 0;
-            targetResolution = mapDistanceToResolution(distance);
+            // 更新當前距離
+            currentDistance = data.distance || 0;
+            
+            // 更新當前解析度 (從後端接收)
+            if (data.resolution) {
+                currentResolution = {
+                    width: data.resolution.width,
+                    height: data.resolution.height
+                };
+            }
             
             // 更新除錯資訊
-            updateDebugInfo('distance', `${distance.toFixed(1)} cm`);
+            updateDebugInfo('distance', `${data.distance.toFixed(1)} cm`);
             updateDebugInfo('count', data.total_count || 0);
-            updateDebugInfo('resolution', `${targetResolution.width} x ${targetResolution.height}`);
+            updateDebugInfo('resolution', `${currentResolution.width} x ${currentResolution.height}`);
+            updateDebugInfo('quality', data.quality || '--');
             
             // 解碼並繪製影像
             const img = new Image();
@@ -355,51 +401,109 @@
             img.src = 'data:image/jpeg;base64,' + data.image;
         }
 
-        // ===== 距離 → 解析度映射 =====
-        function mapDistanceToResolution(distance) {
-            const minDist = config.distance_mapping.min_distance;
-            const maxDist = config.distance_mapping.max_distance;
-            const minWidth = config.blur_control.min_resolution_width;
-            const maxWidth = config.blur_control.max_resolution_width;
-            
-            // 如果沒有偵測到人 (distance = 0),使用最大解析度
-            if (distance === 0) {
-                return { width: maxWidth, height: Math.round(maxWidth * 9 / 16) };
-            }
-            
-            // 距離限制在範圍內
-            const clampedDist = Math.max(minDist, Math.min(maxDist, distance));
-            
-            // 線性映射 (距離越近,解析度越低)
-            const ratio = (clampedDist - minDist) / (maxDist - minDist);
-            const width = Math.round(minWidth + ratio * (maxWidth - minWidth));
-            const height = Math.round(width * 9 / 16);
-            
-            return { width, height };
-        }
-
         // ===== 繪製影像幀 =====
         function drawFrame(img) {
-            // 平滑過渡解析度
-            const lerpSpeed = 0.1;
-            currentResolution.width += (targetResolution.width - currentResolution.width) * lerpSpeed;
-            currentResolution.height += (targetResolution.height - currentResolution.height) * lerpSpeed;
+            // 檢查是否需要更新 Canvas 尺寸
+            if (canvas.width !== currentResolution.width || canvas.height !== currentResolution.height) {
+                // 立即更新尺寸，不使用動畫或過渡
+                canvas.width = currentResolution.width;
+                canvas.height = currentResolution.height;
+            }
             
-            // 設定 Canvas 解析度
-            canvas.width = Math.round(currentResolution.width);
-            canvas.height = Math.round(currentResolution.height);
+            // 清除之前的內容（避免殘影）
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // 繪製影像
+            // 繪製新影像，填滿整個 Canvas
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            
+            // 繪製模糊圖層（如果啟用）
+            if (config.blur_overlay && config.blur_overlay.enabled) {
+                drawBlurOverlay();
+            }
             
             // 更新除錯資訊
             updateDebugInfo('current-res', `${canvas.width} x ${canvas.height}`);
         }
 
-        // ===== 動畫迴圈 =====
-        function animationLoop() {
-            // 這裡可以添加其他動畫效果
-            requestAnimationFrame(animationLoop);
+        // ===== 繪製模糊圖層 =====
+        function drawBlurOverlay() {
+            const overlay = config.blur_overlay;
+            
+            // 計算當前距離對應的模糊參數
+            const normalizedDistance = calculateNormalizedDistance(
+                currentDistance,
+                overlay.min_distance,
+                overlay.max_distance
+            );
+            
+            // 使用緩動函數
+            const easedValue = applyEasing(normalizedDistance, overlay.easing_function);
+            
+            // 計算模糊半徑和透明度（距離越近，模糊越強）
+            currentBlurRadius = lerp(overlay.max_blur_radius, overlay.min_blur_radius, easedValue);
+            currentOpacity = lerp(overlay.max_opacity, overlay.min_opacity, easedValue);
+            
+            // 更新除錯資訊
+            updateDebugInfo('blur', `${currentBlurRadius.toFixed(1)} px`);
+            updateDebugInfo('opacity', `${(currentOpacity * 100).toFixed(1)}%`);
+            
+            // 只在有效果時繪製
+            if (currentBlurRadius > 0 && currentOpacity > 0) {
+                // 多層繪製以增強柔和效果
+                const layerCount = overlay.layer_count || 3;
+                const opacityPerLayer = currentOpacity / layerCount;
+                
+                for (let i = 0; i < layerCount; i++) {
+                    ctx.save();
+                    
+                    // 設定混合模式
+                    ctx.globalCompositeOperation = overlay.blend_mode || 'normal';
+                    ctx.globalAlpha = opacityPerLayer;
+                    
+                    // 設定模糊濾鏡
+                    const blurPerLayer = currentBlurRadius * (1 - i / layerCount * 0.3);
+                    ctx.filter = `blur(${blurPerLayer}px)`;
+                    
+                    // 繪製半透明色塊
+                    ctx.fillStyle = overlay.overlay_color || '#888888';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    
+                    ctx.restore();
+                }
+                
+                // 重設濾鏡和透明度
+                ctx.filter = 'none';
+                ctx.globalAlpha = 1.0;
+                ctx.globalCompositeOperation = 'source-over';
+            }
+        }
+
+        // ===== 計算正規化距離 (0-1) =====
+        function calculateNormalizedDistance(distance, minDist, maxDist) {
+            if (distance <= minDist) return 0;
+            if (distance >= maxDist) return 1;
+            return (distance - minDist) / (maxDist - minDist);
+        }
+
+        // ===== 緩動函數 =====
+        function applyEasing(t, easingType) {
+            switch (easingType) {
+                case 'linear':
+                    return t;
+                case 'ease-in':
+                    return t * t;
+                case 'ease-out':
+                    return 1 - Math.pow(1 - t, 2);
+                case 'ease-in-out':
+                    return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+                default:
+                    return t;
+            }
+        }
+
+        // ===== 線性插值 =====
+        function lerp(start, end, t) {
+            return start + (end - start) * t;
         }
 
         // ===== 更新連線狀態 UI =====

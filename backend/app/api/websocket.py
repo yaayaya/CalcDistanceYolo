@@ -117,7 +117,7 @@ async def websocket_flur(websocket: WebSocket):
     """
     互動藝術裝置串流 (FlurPaint 展覽作品用)
     
-    回傳影像幀與距離資料:
+    回傳影像幀與距離資料 - 影像解析度和 JPEG 品質根據距離動態調整:
     {
         "type": "frame_data",
         "image": "base64_encoded_jpeg",
@@ -125,8 +125,10 @@ async def websocket_flur(websocket: WebSocket):
         "total_count": int,
         "timestamp": float,
         "resolution": {
-            "source": {"width": 1920, "height": 1080}
-        }
+            "width": int,
+            "height": int
+        },
+        "quality": int
     }
     """
     await websocket.accept()
@@ -136,27 +138,45 @@ async def websocket_flur(websocket: WebSocket):
         if not detector_service.is_running:
             await detector_service.start_detection()
         
+        # 讀取串流配置
+        streaming_config = detector_service.project_config.get("flur_streaming", {})
+        jpeg_quality = streaming_config.get("jpeg_quality", 70)
+        enable_dynamic = streaming_config.get("enable_dynamic_resolution", True)
+        enable_dynamic_quality = streaming_config.get("enable_dynamic_quality", False)
+        
         # 訂閱偵測串流
         async for detection_data in detector_service.detection_stream():
-            # 取得當前影像幀的 Base64 編碼
-            frame_base64 = detector_service.get_current_frame_base64(quality=85)
+            # 取得距離
+            distance = detection_data.get("closest_distance", 0)
             
-            if frame_base64 is None:
+            if enable_dynamic:
+                # 根據距離取得動態解析度的影像幀
+                frame_data = detector_service.get_frame_with_resolution(
+                    distance=distance,
+                    quality=jpeg_quality if not enable_dynamic_quality else None,
+                    enable_dynamic_quality=enable_dynamic_quality
+                )
+            else:
+                # 使用原始解析度
+                frame_base64 = detector_service.get_current_frame_base64(quality=jpeg_quality)
+                frame_data = {
+                    "image": frame_base64,
+                    "resolution": {"width": 1920, "height": 1080},
+                    "quality": jpeg_quality
+                } if frame_base64 else None
+            
+            if frame_data is None:
                 continue
             
             # 組裝資料
             flur_data = {
                 "type": "frame_data",
-                "image": frame_base64,
-                "distance": detection_data.get("closest_distance", 0),
+                "image": frame_data["image"],
+                "distance": distance,
                 "total_count": detection_data.get("total_count", 0),
                 "timestamp": detection_data.get("timestamp", 0),
-                "resolution": {
-                    "source": {
-                        "width": 1920,
-                        "height": 1080
-                    }
-                }
+                "resolution": frame_data["resolution"],
+                "quality": frame_data.get("quality", jpeg_quality)
             }
             
             try:
