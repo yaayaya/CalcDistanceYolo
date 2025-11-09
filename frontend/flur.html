@@ -219,13 +219,20 @@
         
         // 當前距離與模糊參數
         let currentDistance = 0;
+        let targetDistance = 0;  // 目標距離
+        let smoothedDistance = 0; // 平滑後的距離
         let currentBlurRadius = 0;
         let currentOpacity = 0;
         
+        // 距離平滑過渡配置（從 config 載入）
+        let DISTANCE_SMOOTH_SPEED = 0.15;
+        let DISTANCE_CHANGE_THRESHOLD = 10;
+        
         // FPS 計算
         let frameCount = 0;
-        let lastFpsUpdate = Date.now();
+        let lastFpsUpdate = performance.now();
         let currentFps = 0;
+        let lastFrameTime = 0;
 
         // ===== 初始化 =====
         document.addEventListener('DOMContentLoaded', async () => {
@@ -253,7 +260,15 @@
                 
                 if (result.status === 'success') {
                     config = result.data;
+                    
+                    // 載入距離平滑參數
+                    if (config.distance_smoothing) {
+                        DISTANCE_SMOOTH_SPEED = config.distance_smoothing.smooth_speed || 0.15;
+                        DISTANCE_CHANGE_THRESHOLD = config.distance_smoothing.change_threshold || 10;
+                    }
+                    
                     console.log('✅ 配置已載入:', config);
+                    console.log(`📊 距離平滑: 速度=${DISTANCE_SMOOTH_SPEED}, 閾值=${DISTANCE_CHANGE_THRESHOLD}cm`);
                 } else {
                     console.error('❌ 載入配置失敗');
                     useDefaultConfig();
@@ -288,7 +303,7 @@
                     show_distance: false
                 },
                 blur_overlay: {
-                    enabled: true,
+                    enabled: false,
                     min_distance: 70,
                     max_distance: 120,
                     min_blur_radius: 0,
@@ -299,6 +314,23 @@
                     easing_function: "ease-out",
                     layer_count: 3,
                     blend_mode: "normal"
+                },
+                canvas_filter: {
+                    enabled: true,
+                    min_distance: 70,
+                    max_distance: 120,
+                    min_blur_radius: 0,
+                    max_blur_radius: 5,
+                    easing_function: "ease-out",
+                    noise_enabled: true,
+                    min_noise_intensity: 0,
+                    max_noise_intensity: 0.08,
+                    noise_blend_mode: "overlay"
+                },
+                distance_smoothing: {
+                    enabled: true,
+                    smooth_speed: 0.15,
+                    change_threshold: 10
                 }
             };
         }
@@ -366,8 +398,26 @@
         function handleFrameData(data) {
             if (data.type !== 'frame_data') return;
             
-            // 更新當前距離
-            currentDistance = data.distance || 0;
+            // 更新目標距離（使用平滑過渡）
+            targetDistance = data.distance || 0;
+            
+            // 初始化平滑距離
+            if (smoothedDistance === 0) {
+                smoothedDistance = targetDistance;
+            }
+            
+            // 平滑距離過渡 (線性插值)
+            const distanceDiff = Math.abs(targetDistance - smoothedDistance);
+            if (distanceDiff > DISTANCE_CHANGE_THRESHOLD) {
+                // 距離變化較大時使用平滑過渡
+                smoothedDistance += (targetDistance - smoothedDistance) * DISTANCE_SMOOTH_SPEED;
+            } else {
+                // 距離變化小時直接使用目標距離
+                smoothedDistance = targetDistance;
+            }
+            
+            // 使用平滑後的距離
+            currentDistance = smoothedDistance;
             
             // 更新當前解析度 (從後端接收)
             if (data.resolution) {
@@ -378,7 +428,7 @@
             }
             
             // 更新除錯資訊
-            updateDebugInfo('distance', `${data.distance.toFixed(1)} cm`);
+            updateDebugInfo('distance', `${targetDistance.toFixed(1)} cm → ${smoothedDistance.toFixed(1)} cm`);
             updateDebugInfo('count', data.total_count || 0);
             updateDebugInfo('resolution', `${currentResolution.width} x ${currentResolution.height}`);
             updateDebugInfo('quality', data.quality || '--');
@@ -386,13 +436,15 @@
             // 解碼並繪製影像
             const img = new Image();
             img.onload = () => {
+                const now = performance.now();
+                
                 drawFrame(img);
                 
                 // 計算 FPS
                 frameCount++;
-                const now = Date.now();
-                if (now - lastFpsUpdate >= 1000) {
-                    currentFps = frameCount;
+                const elapsed = now - lastFpsUpdate;
+                if (elapsed >= 1000) {
+                    currentFps = Math.round((frameCount * 1000) / elapsed);
                     frameCount = 0;
                     lastFpsUpdate = now;
                     updateDebugInfo('fps', currentFps);
@@ -404,17 +456,21 @@
         // ===== 繪製影像幀 =====
         function drawFrame(img) {
             // 檢查是否需要更新 Canvas 尺寸
-            if (canvas.width !== currentResolution.width || canvas.height !== currentResolution.height) {
+            const needsResize = canvas.width !== currentResolution.width || canvas.height !== currentResolution.height;
+            
+            if (needsResize) {
                 // 立即更新尺寸，不使用動畫或過渡
                 canvas.width = currentResolution.width;
                 canvas.height = currentResolution.height;
             }
             
-            // 清除之前的內容（避免殘影）
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // 繪製新影像，填滿整個 Canvas
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            // 套用 Canvas Filter 模糊（GPU 加速）
+            if (config.canvas_filter && config.canvas_filter.enabled) {
+                applyCanvasFilter(img);
+            } else {
+                // 繪製新影像，填滿整個 Canvas（自動覆蓋舊內容）
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            }
             
             // 繪製模糊圖層（如果啟用）
             if (config.blur_overlay && config.blur_overlay.enabled) {
@@ -422,7 +478,9 @@
             }
             
             // 更新除錯資訊
-            updateDebugInfo('current-res', `${canvas.width} x ${canvas.height}`);
+            if (needsResize) {
+                updateDebugInfo('current-res', `${canvas.width} x ${canvas.height}`);
+            }
         }
 
         // ===== 繪製模糊圖層 =====
@@ -476,6 +534,88 @@
                 ctx.globalAlpha = 1.0;
                 ctx.globalCompositeOperation = 'source-over';
             }
+        }
+
+        // ===== 套用 Canvas Filter 模糊（GPU 加速）=====
+        function applyCanvasFilter(img) {
+            const filterConfig = config.canvas_filter;
+            
+            // 計算當前距離對應的模糊參數
+            const normalizedDistance = calculateNormalizedDistance(
+                currentDistance,
+                filterConfig.min_distance,
+                filterConfig.max_distance
+            );
+            
+            // 使用緩動函數
+            const easedValue = applyEasing(normalizedDistance, filterConfig.easing_function || 'ease-out');
+            
+            // 計算模糊半徑（距離越近，模糊越強）
+            const blurRadius = lerp(filterConfig.max_blur_radius, filterConfig.min_blur_radius, easedValue);
+            
+            // 套用 Canvas filter（GPU 加速）
+            ctx.save();
+            if (blurRadius > 0) {
+                ctx.filter = `blur(${blurRadius}px)`;
+            }
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            ctx.filter = 'none';
+            ctx.restore();
+            
+            // 疊加噪點層（增強細節）
+            if (filterConfig.noise_enabled) {
+                const noiseIntensity = lerp(
+                    filterConfig.max_noise_intensity,
+                    filterConfig.min_noise_intensity,
+                    easedValue
+                );
+                if (noiseIntensity > 0) {
+                    drawNoiseLayer(noiseIntensity, filterConfig.noise_blend_mode || 'overlay');
+                }
+            }
+            
+            // 更新除錯資訊
+            updateDebugInfo('blur', `Canvas Filter: ${blurRadius.toFixed(1)} px`);
+        }
+
+        // ===== 繪製噪點層 =====
+        let noiseCanvas = null;
+        let noiseCtx = null;
+        
+        function drawNoiseLayer(intensity, blendMode) {
+            // 使用離屏 Canvas 快取噪點，提升效能
+            if (!noiseCanvas || noiseCanvas.width !== canvas.width || noiseCanvas.height !== canvas.height) {
+                noiseCanvas = document.createElement('canvas');
+                noiseCanvas.width = canvas.width;
+                noiseCanvas.height = canvas.height;
+                noiseCtx = noiseCanvas.getContext('2d', { alpha: false });
+            }
+            
+            // 建立噪點圖案（降低解析度以提升效能）
+            const scale = 0.5; // 噪點解析度縮放
+            const noiseData = noiseCtx.createImageData(canvas.width * scale, canvas.height * scale);
+            const pixels = noiseData.data;
+            const intensityValue = 255 * intensity;
+            
+            // 批次生成噪點
+            for (let i = 0; i < pixels.length; i += 4) {
+                const noise = (Math.random() - 0.5) * intensityValue;
+                const gray = 128 + noise;
+                pixels[i] = gray;     // R
+                pixels[i + 1] = gray; // G
+                pixels[i + 2] = gray; // B
+                pixels[i + 3] = 255;  // A
+            }
+            
+            // 將噪點繪製到離屏 Canvas
+            noiseCtx.putImageData(noiseData, 0, 0);
+            
+            // 疊加噪點到主 Canvas
+            ctx.save();
+            ctx.globalCompositeOperation = blendMode;
+            ctx.drawImage(noiseCanvas, 0, 0, canvas.width, canvas.height);
+            ctx.restore();
+            ctx.globalCompositeOperation = 'source-over';
         }
 
         // ===== 計算正規化距離 (0-1) =====

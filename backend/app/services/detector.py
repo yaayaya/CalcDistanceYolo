@@ -449,7 +449,12 @@ class YOLODetectorService:
             # 限制品質範圍
             quality = max(1, min(100, quality))
             
-            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
+            # 優化編碼參數以提升速度
+            encode_param = [
+                int(cv2.IMWRITE_JPEG_QUALITY), quality,
+                int(cv2.IMWRITE_JPEG_OPTIMIZE), 0,  # 關閉優化以加速
+                int(cv2.IMWRITE_JPEG_PROGRESSIVE), 0  # 關閉漸進式以加速
+            ]
             success, buffer = cv2.imencode('.jpg', frame, encode_param)
             
             if not success:

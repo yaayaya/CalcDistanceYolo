@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FPS 測試</title>
+    <style>
+        body {
+            background: #000;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            padding: 20px;
+        }
+        #fps-display {
+            font-size: 48px;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+        #stats {
+            font-size: 18px;
+            line-height: 1.8;
+        }
+        .label {
+            color: #0ff;
+        }
+    </style>
+</head>
+<body>
+    <h1>WebSocket FPS 測試</h1>
+    <div id="fps-display">FPS: --</div>
+    <div id="stats">
+        <div><span class="label">接收幀數:</span> <span id="frame-count">0</span></div>
+        <div><span class="label">平均延遲:</span> <span id="avg-latency">-- ms</span></div>
+        <div><span class="label">最後更新:</span> <span id="last-update">--</span></div>
+        <div><span class="label">連線狀態:</span> <span id="connection-status">未連線</span></div>
+    </div>
+
+    <script>
+        let ws = null;
+        let frameCount = 0;
+        let lastFpsUpdate = performance.now();
+        let currentFps = 0;
+        let latencies = [];
+        
+        function connect() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws/flur`;
+            
+            document.getElementById('connection-status').textContent = '連線中...';
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                console.log('✅ WebSocket 已連線');
+                document.getElementById('connection-status').textContent = '已連線';
+                document.getElementById('connection-status').style.color = '#0f0';
+            };
+            
+            ws.onmessage = (event) => {
+                const now = performance.now();
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'frame_data') {
+                    // 計算延遲
+                    const latency = now - (data.timestamp * 1000);
+                    latencies.push(latency);
+                    if (latencies.length > 30) latencies.shift();
+                    
+                    // 更新統計
+                    frameCount++;
+                    document.getElementById('frame-count').textContent = frameCount;
+                    document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+                    
+                    const avgLatency = latencies.reduce((a, b) => a + b, 0) / latencies.length;
+                    document.getElementById('avg-latency').textContent = avgLatency.toFixed(1);
+                    
+                    // 計算 FPS
+                    const elapsed = now - lastFpsUpdate;
+                    if (elapsed >= 1000) {
+                        currentFps = Math.round((frameCount * 1000) / elapsed);
+                        document.getElementById('fps-display').textContent = `FPS: ${currentFps}`;
+                        frameCount = 0;
+                        lastFpsUpdate = now;
+                    }
+                }
+            };
+            
+            ws.onerror = (error) => {
+                console.error('❌ WebSocket 錯誤:', error);
+                document.getElementById('connection-status').textContent = '連線錯誤';
+                document.getElementById('connection-status').style.color = '#f00';
+            };
+            
+            ws.onclose = () => {
+                console.log('⏹ WebSocket 已斷線');
+                document.getElementById('connection-status').textContent = '已斷線';
+                document.getElementById('connection-status').style.color = '#f00';
+                setTimeout(connect, 5000);
+            };
+        }
+        
+        // 啟動連線
+        connect();
+    </script>
+</body>
+</html>

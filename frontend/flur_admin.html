@@ -371,6 +371,41 @@
                 </div>
             </section>
 
+            <!-- 距離平滑過渡設定 -->
+            <section class="section">
+                <h2>🔄 距離平滑過渡</h2>
+                
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="distance-smoothing-enabled">
+                        <span>啟用距離平滑過渡 (避免人員離開時畫面突變)</span>
+                    </label>
+                    <small>當偵測到多人時，若其中一人離開，距離會平滑過渡而非瞬間跳變</small>
+                </div>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="smooth-speed">平滑速度</label>
+                        <input type="number" id="smooth-speed" min="0.05" max="0.5" step="0.05">
+                        <small>數值越大過渡越快 (建議 0.1-0.2)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="change-threshold">變化閾值 (cm)</label>
+                        <input type="number" id="change-threshold" min="5" max="50" step="5">
+                        <small>超過此距離差異才啟用平滑過渡</small>
+                    </div>
+                </div>
+
+                <div class="device-info">
+                    <h3>💡 平滑過渡說明</h3>
+                    <p><strong>情境:</strong> 兩人相距較遠，其中一人突然離開</p>
+                    <p><strong>無平滑:</strong> 畫面解析度會瞬間從低跳到高，非常突兀</p>
+                    <p><strong>有平滑:</strong> 解析度會漸進式提高，視覺流暢自然</p>
+                    <p><strong>建議參數:</strong> 速度 0.15、閾值 10cm</p>
+                </div>
+            </section>
+
             <!-- 串流效能設定 -->
             <section class="section">
                 <h2>🚀 串流效能設定</h2>
@@ -476,9 +511,100 @@
                 </div>
             </section>
 
+            <!-- Canvas Filter GPU 加速模糊 -->
+            <section class="section">
+                <h2>⚡ Canvas Filter GPU 加速模糊</h2>
+                
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="canvas-filter-enabled">
+                        <span>啟用 Canvas Filter 模糊 (GPU 加速，效能最佳)</span>
+                    </label>
+                    <small>使用 ctx.filter 實現硬體加速的模糊效果，比傳統方法快速流暢</small>
+                </div>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="canvas-filter-min-distance">觸發最小距離 (cm)</label>
+                        <input type="number" id="canvas-filter-min-distance" min="10" max="200" step="5">
+                        <small>此距離時模糊效果最強</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="canvas-filter-max-distance">觸發最大距離 (cm)</label>
+                        <input type="number" id="canvas-filter-max-distance" min="200" max="1000" step="10">
+                        <small>此距離時模糊效果消失</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="canvas-filter-min-blur">最小模糊半徑 (px)</label>
+                        <input type="number" id="canvas-filter-min-blur" min="0" max="5" step="0.5">
+                        <small>最遠距離時的模糊程度</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="canvas-filter-max-blur">最大模糊半徑 (px)</label>
+                        <input type="number" id="canvas-filter-max-blur" min="0" max="20" step="0.5">
+                        <small>最近距離時的模糊程度 (建議 3-8)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="canvas-filter-easing">緩動函數</label>
+                        <select id="canvas-filter-easing">
+                            <option value="linear">線性 (Linear)</option>
+                            <option value="ease-in">緩入 (Ease In)</option>
+                            <option value="ease-out">緩出 (Ease Out)</option>
+                            <option value="ease-in-out">緩入緩出 (Ease In-Out)</option>
+                        </select>
+                        <small>模糊效果隨距離變化的曲線</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="canvas-filter-noise-enabled">
+                            <span>啟用噪點疊加 (增強細節豐富度)</span>
+                        </label>
+                        <small>在模糊影像上添加噪點，讓低解析度畫面更有質感</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="canvas-filter-min-noise">最小噪點強度</label>
+                        <input type="number" id="canvas-filter-min-noise" min="0" max="0.5" step="0.01">
+                        <small>最遠距離時的噪點強度 (0-0.5)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="canvas-filter-max-noise">最大噪點強度</label>
+                        <input type="number" id="canvas-filter-max-noise" min="0" max="0.5" step="0.01">
+                        <small>最近距離時的噪點強度 (建議 0.05-0.15)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="canvas-filter-noise-blend">噪點混合模式</label>
+                        <select id="canvas-filter-noise-blend">
+                            <option value="normal">正常 (Normal)</option>
+                            <option value="multiply">色彩增值 (Multiply)</option>
+                            <option value="screen">濾色 (Screen)</option>
+                            <option value="overlay">覆蓋 (Overlay)</option>
+                            <option value="soft-light">柔光 (Soft Light)</option>
+                        </select>
+                        <small>噪點與原圖的混合方式</small>
+                    </div>
+                </div>
+
+                <div class="device-info">
+                    <h3>💡 Canvas Filter 優勢</h3>
+                    <p><strong>GPU 加速:</strong> 使用硬體加速，效能比 CPU 計算快數倍</p>
+                    <p><strong>流暢度高:</strong> 可以達到 60fps 的即時模糊效果</p>
+                    <p><strong>品質優異:</strong> 使用瀏覽器原生濾鏡，質量媲美專業軟體</p>
+                    <p><strong>建議參數:</strong> 模糊半徑 3-5px，噪點強度 0.08，混合模式 Overlay</p>
+                    <p><strong>注意:</strong> Canvas Filter 與模糊圖層可同時使用，產生複合效果</p>
+                </div>
+            </section>
+
             <!-- 模糊圖層設定 -->
             <section class="section">
-                <h2>🎨 模糊圖層效果</h2>
+                <h2>🎨 模糊圖層效果 (傳統方法)</h2>
                 
                 <div class="form-group">
                     <label class="checkbox-label">
@@ -667,6 +793,25 @@
             document.getElementById('blur-easing').value = blurOverlay.easing_function || 'ease-out';
             document.getElementById('layer-count').value = blurOverlay.layer_count || 3;
             document.getElementById('blend-mode').value = blurOverlay.blend_mode || 'normal';
+
+            // Canvas Filter 設定
+            const canvasFilter = config.canvas_filter || {};
+            document.getElementById('canvas-filter-enabled').checked = canvasFilter.enabled !== false;
+            document.getElementById('canvas-filter-min-distance').value = canvasFilter.min_distance || 70;
+            document.getElementById('canvas-filter-max-distance').value = canvasFilter.max_distance || 120;
+            document.getElementById('canvas-filter-min-blur').value = canvasFilter.min_blur_radius || 0;
+            document.getElementById('canvas-filter-max-blur').value = canvasFilter.max_blur_radius || 5;
+            document.getElementById('canvas-filter-easing').value = canvasFilter.easing_function || 'ease-out';
+            document.getElementById('canvas-filter-noise-enabled').checked = canvasFilter.noise_enabled !== false;
+            document.getElementById('canvas-filter-min-noise').value = canvasFilter.min_noise_intensity || 0;
+            document.getElementById('canvas-filter-max-noise').value = canvasFilter.max_noise_intensity || 0.08;
+            document.getElementById('canvas-filter-noise-blend').value = canvasFilter.noise_blend_mode || 'overlay';
+
+            // 距離平滑設定
+            const distanceSmoothing = config.distance_smoothing || {};
+            document.getElementById('distance-smoothing-enabled').checked = distanceSmoothing.enabled !== false;
+            document.getElementById('smooth-speed').value = distanceSmoothing.smooth_speed || 0.15;
+            document.getElementById('change-threshold').value = distanceSmoothing.change_threshold || 10;
         }
 
         // 儲存配置
@@ -721,6 +866,23 @@
                         easing_function: document.getElementById('blur-easing').value,
                         layer_count: parseInt(document.getElementById('layer-count').value),
                         blend_mode: document.getElementById('blend-mode').value
+                    },
+                    canvas_filter: {
+                        enabled: document.getElementById('canvas-filter-enabled').checked,
+                        min_distance: parseInt(document.getElementById('canvas-filter-min-distance').value),
+                        max_distance: parseInt(document.getElementById('canvas-filter-max-distance').value),
+                        min_blur_radius: parseFloat(document.getElementById('canvas-filter-min-blur').value),
+                        max_blur_radius: parseFloat(document.getElementById('canvas-filter-max-blur').value),
+                        easing_function: document.getElementById('canvas-filter-easing').value,
+                        noise_enabled: document.getElementById('canvas-filter-noise-enabled').checked,
+                        min_noise_intensity: parseFloat(document.getElementById('canvas-filter-min-noise').value),
+                        max_noise_intensity: parseFloat(document.getElementById('canvas-filter-max-noise').value),
+                        noise_blend_mode: document.getElementById('canvas-filter-noise-blend').value
+                    },
+                    distance_smoothing: {
+                        enabled: document.getElementById('distance-smoothing-enabled').checked,
+                        smooth_speed: parseFloat(document.getElementById('smooth-speed').value),
+                        change_threshold: parseInt(document.getElementById('change-threshold').value)
                     }
                 };
 
