@@ -164,3 +164,20 @@ def save_project_config(config: Dict[str, Any]) -> bool:
         print(f"儲存專案配置失敗: {e}")
         return False
 
+
+def save_sensor_config(config: Dict[str, Any]) -> bool:
+    """
+    儲存感測器配置
+    """
+    try:
+        # 確保 configs 目錄存在
+        SENSOR_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        
+        with open(SENSOR_CONFIG_PATH, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print(f"儲存感測器配置失敗: {e}")
+        return False
+
+

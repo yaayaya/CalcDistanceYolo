@@ -10,18 +10,20 @@
     "sample_rate": 20
   },
   "distance_mapping": {
-    "min_distance": 50,
-    "max_distance": 90,
+    "min_distance": 60,
+    "max_distance": 80,
     "easing_function": "linear"
   },
   "flur_streaming": {
-    "jpeg_quality": 75,
-    "min_jpeg_quality": 20,
-    "max_jpeg_quality": 75,
+    "enable_dynamic_resolution": true,
+    "min_resolution_scale": 0.25,
+    "max_resolution_scale": 1,
     "enable_dynamic_quality": true,
-    "max_fps": 30,
-    "frame_skip": 1,
-    "enable_dynamic_resolution": true
+    "jpeg_quality": 70,
+    "min_jpeg_quality": 20,
+    "max_jpeg_quality": 85,
+    "max_fps": 60,
+    "frame_skip": 1
   },
   "yolo_device": {
     "device": "mps",
@@ -57,14 +59,14 @@
   },
   "canvas_filter": {
     "enabled": true,
-    "min_distance": 70,
-    "max_distance": 120,
+    "min_distance": 60,
+    "max_distance": 80,
     "min_blur_radius": 0,
-    "max_blur_radius": 5,
+    "max_blur_radius": 12,
     "easing_function": "ease-out",
     "noise_enabled": false,
     "min_noise_intensity": 0,
-    "max_noise_intensity": 0.09,
+    "max_noise_intensity": 0.05,
     "noise_blend_mode": "overlay"
   },
   "distance_smoothing": {

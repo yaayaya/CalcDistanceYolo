@@ -406,9 +406,48 @@
                 </div>
             </section>
 
-            <!-- 串流效能設定 -->
+            <!-- 藝術效果設定 -->
             <section class="section">
-                <h2>🚀 串流效能設定</h2>
+                <h2>🎨 畫面品質藝術效果</h2>
+                
+                <div class="device-info">
+                    <h3>💡 藝術呈現說明</h3>
+                    <p><strong>動態解析度:</strong> 根據觀眾距離動態降低畫面解析度，營造像素化效果</p>
+                    <p><strong>JPEG 壓縮:</strong> 根據距離調整 Canvas 輸出品質，產生壓縮失真效果</p>
+                    <p><strong>藝術意涵:</strong> 距離越近畫質越差，象徵隱私保護與觀看距離的關係</p>
+                    <p><strong>技術實現:</strong> 前端 Canvas 即時重繪，無網路傳輸延遲</p>
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="enable-dynamic-resolution">
+                        <span>啟用動態解析度效果</span>
+                    </label>
+                    <small>根據距離自動調整畫面解析度（距離越近解析度越低）</small>
+                </div>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="min-resolution-scale">最低解析度比例</label>
+                        <input type="number" id="min-resolution-scale" min="0.1" max="1" step="0.05">
+                        <small>最近距離時的解析度 (0.1=10%, 1.0=100%)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="max-resolution-scale">最高解析度比例</label>
+                        <input type="number" id="max-resolution-scale" min="0.1" max="1" step="0.05">
+                        <small>最遠距離時的解析度 (建議 0.8-1.0)</small>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="enable-dynamic-quality">
+                        <span>啟用動態 JPEG 品質效果</span>
+                    </label>
+                    <small>根據距離自動調整 Canvas 輸出品質，產生壓縮失真效果</small>
+                </div>
+
                 <div class="form-grid">
                     <div class="form-group">
                         <label for="jpeg-quality">JPEG 壓縮品質 (固定值)</label>
@@ -419,7 +458,7 @@
                     <div class="form-group">
                         <label for="min-jpeg-quality">最低 JPEG 品質</label>
                         <input type="number" id="min-jpeg-quality" min="1" max="100" step="5">
-                        <small>最近距離時的品質（距離越近品質越低）</small>
+                        <small>最近距離時的品質（距離越近品質越低，失真越明顯）</small>
                     </div>
 
                     <div class="form-group">
@@ -427,34 +466,42 @@
                         <input type="number" id="max-jpeg-quality" min="1" max="100" step="5">
                         <small>最遠距離時的品質（距離越遠品質越高）</small>
                     </div>
+                </div>
 
-                    <div class="form-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="enable-dynamic-quality">
-                            <span>啟用動態 JPEG 品質</span>
-                        </label>
-                        <small>根據距離自動調整品質，進一步提升 FPS</small>
-                    </div>
-
+                <div class="form-grid">
                     <div class="form-group">
                         <label for="max-fps">最大 FPS</label>
                         <input type="number" id="max-fps" min="10" max="60" step="5">
-                        <small>串流最大幀率限制</small>
+                        <small>畫面更新最大幀率限制 (建議 30fps)</small>
                     </div>
 
                     <div class="form-group">
                         <label for="frame-skip">跳幀數</label>
                         <input type="number" id="frame-skip" min="1" max="10" step="1">
-                        <small>每隔多少幀傳送一次 (1=不跳幀)</small>
+                        <small>每隔多少幀處理一次 (1=不跳幀，2=每隔一幀)</small>
                     </div>
+                </div>
+            </section>
 
-                    <div class="form-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="enable-dynamic-resolution">
-                            <span>啟用動態解析度</span>
-                        </label>
-                        <small>關閉後將固定使用最高解析度</small>
-                    </div>
+            <!-- 攝影機選擇設定 -->
+            <section class="section">
+                <h2>📹 攝影機設定</h2>
+                <div class="form-group">
+                    <label for="frontend-camera">前端展示用攝影機</label>
+                    <select id="frontend-camera">
+                        <option value="0">攝影機 0 (預設)</option>
+                        <option value="1">攝影機 1</option>
+                    </select>
+                    <small>FlurPaint 展覽頁面會使用此攝影機取得畫面</small>
+                </div>
+
+                <div class="device-info">
+                    <h3>💡 攝影機設定說明</h3>
+                    <p><strong>雙攝影機配置:</strong> 已接入兩個攝影機</p>
+                    <p><strong>後端 YOLO 偵測:</strong> 使用 sensor_config.json 中設定的攝影機 (source)</p>
+                    <p><strong>前端展示畫面:</strong> 使用此處設定的攝影機直接透過 getUserMedia API 取得</p>
+                    <p><strong>效能優化:</strong> 前端不再接收後端傳送的影像，只接收距離資料，大幅減少網路傳輸</p>
+                    <p><strong>建議配置:</strong> 後端使用攝影機 0 進行人員偵測，前端使用攝影機 1 展示畫面</p>
                 </div>
             </section>
 
@@ -721,8 +768,50 @@
         // 頁面載入時讀取配置
         document.addEventListener('DOMContentLoaded', () => {
             loadConfig();
+            loadCameraSelection();
             bindDeviceChangeEvent();
         });
+
+        // 載入攝影機設定
+        async function loadCameraSelection() {
+            try {
+                const response = await fetch('/api/camera-selection');
+                const result = await response.json();
+
+                if (result.status === 'success') {
+                    const cameraId = result.data.selected_camera || 0;
+                    document.getElementById('frontend-camera').value = cameraId;
+                    console.log('✅ 攝影機設定已載入:', cameraId);
+                }
+            } catch (error) {
+                console.error('載入攝影機設定錯誤:', error);
+            }
+        }
+
+        // 儲存攝影機設定
+        async function saveCameraSelection() {
+            try {
+                const cameraId = parseInt(document.getElementById('frontend-camera').value);
+                
+                const response = await fetch(`/api/camera-selection?camera_id=${cameraId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const result = await response.json();
+
+                if (result.status === 'success') {
+                    showMessage(`前端攝影機已設定為: ${cameraId}`, 'success');
+                } else {
+                    showMessage('儲存攝影機設定失敗', 'error');
+                }
+            } catch (error) {
+                console.error('儲存攝影機設定錯誤:', error);
+                showMessage('儲存攝影機設定錯誤: ' + error.message, 'error');
+            }
+        }
 
         // 載入配置
         async function loadConfig() {
@@ -760,15 +849,17 @@
             document.getElementById('max-distance').value = config.distance_mapping.max_distance;
             document.getElementById('easing-function').value = config.distance_mapping.easing_function;
 
-            // 串流效能設定
+            // 藝術效果設定
             const streamingConfig = config.flur_streaming || {};
+            document.getElementById('enable-dynamic-resolution').checked = streamingConfig.enable_dynamic_resolution !== false;
+            document.getElementById('min-resolution-scale').value = streamingConfig.min_resolution_scale || 0.3;
+            document.getElementById('max-resolution-scale').value = streamingConfig.max_resolution_scale || 1.0;
+            document.getElementById('enable-dynamic-quality').checked = streamingConfig.enable_dynamic_quality || false;
             document.getElementById('jpeg-quality').value = streamingConfig.jpeg_quality || 70;
             document.getElementById('min-jpeg-quality').value = streamingConfig.min_jpeg_quality || 30;
             document.getElementById('max-jpeg-quality').value = streamingConfig.max_jpeg_quality || 85;
-            document.getElementById('enable-dynamic-quality').checked = streamingConfig.enable_dynamic_quality || false;
             document.getElementById('max-fps').value = streamingConfig.max_fps || 30;
             document.getElementById('frame-skip').value = streamingConfig.frame_skip || 1;
-            document.getElementById('enable-dynamic-resolution').checked = streamingConfig.enable_dynamic_resolution !== false;
 
             // YOLO 設備
             document.getElementById('yolo-device').value = config.yolo_device.device;
@@ -817,6 +908,9 @@
         // 儲存配置
         async function saveConfig() {
             try {
+                // 先儲存攝影機設定
+                await saveCameraSelection();
+                
                 // 收集表單數據
                 const updatedConfig = {
                     blur_control: {
@@ -835,13 +929,15 @@
                         easing_function: document.getElementById('easing-function').value
                     },
                     flur_streaming: {
+                        enable_dynamic_resolution: document.getElementById('enable-dynamic-resolution').checked,
+                        min_resolution_scale: parseFloat(document.getElementById('min-resolution-scale').value),
+                        max_resolution_scale: parseFloat(document.getElementById('max-resolution-scale').value),
+                        enable_dynamic_quality: document.getElementById('enable-dynamic-quality').checked,
                         jpeg_quality: parseInt(document.getElementById('jpeg-quality').value),
                         min_jpeg_quality: parseInt(document.getElementById('min-jpeg-quality').value),
                         max_jpeg_quality: parseInt(document.getElementById('max-jpeg-quality').value),
-                        enable_dynamic_quality: document.getElementById('enable-dynamic-quality').checked,
                         max_fps: parseInt(document.getElementById('max-fps').value),
-                        frame_skip: parseInt(document.getElementById('frame-skip').value),
-                        enable_dynamic_resolution: document.getElementById('enable-dynamic-resolution').checked
+                        frame_skip: parseInt(document.getElementById('frame-skip').value)
                     },
                     yolo_device: {
                         device: document.getElementById('yolo-device').value,

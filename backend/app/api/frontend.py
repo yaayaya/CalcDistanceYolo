@@ -268,3 +268,73 @@ async def reset_project_config():
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"重置專案配置失敗: {str(e)}")
+
+
+@router.get("/camera-selection", response_model=ApiResponse)
+async def get_camera_selection():
+    """
+    取得前端攝影機選擇設定
+    
+    Returns:
+        前端應該使用的攝影機編號及可用攝影機清單
+    """
+    try:
+        from ..utils.config_loader import load_sensor_config
+        sensor_config = load_sensor_config()
+        
+        camera_config = sensor_config.get("camera", {})
+        camera_selection = camera_config.get("frontend_camera_selection", 0)
+        available_cameras = camera_config.get("available_cameras", [0, 1])
+        camera_descriptions = camera_config.get("camera_descriptions", {})
+        
+        return ApiResponse(
+            status="success",
+            message="成功取得攝影機設定",
+            data={
+                "selected_camera": camera_selection,
+                "available_cameras": available_cameras,
+                "descriptions": camera_descriptions
+            }
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"讀取攝影機設定失敗: {str(e)}")
+
+
+@router.put("/camera-selection", response_model=ApiResponse)
+async def update_camera_selection(camera_id: int):
+    """
+    更新前端攝影機選擇設定
+    
+    Args:
+        camera_id: 要使用的攝影機編號
+        
+    Returns:
+        更新結果
+    """
+    try:
+        from ..utils.config_loader import load_sensor_config, save_sensor_config
+        sensor_config = load_sensor_config()
+        
+        if "camera" not in sensor_config:
+            sensor_config["camera"] = {}
+        
+        # 更新前端攝影機選擇
+        sensor_config["camera"]["frontend_camera_selection"] = camera_id
+        
+        # 儲存配置
+        success = save_sensor_config(sensor_config)
+        
+        if success:
+            return ApiResponse(
+                status="success",
+                message=f"前端攝影機已設定為: {camera_id}",
+                data={
+                    "selected_camera": camera_id
+                }
+            )
+        else:
+            raise HTTPException(status_code=500, detail="儲存攝影機設定失敗")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"更新攝影機設定失敗: {str(e)}")
+

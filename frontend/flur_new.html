@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FlurPaint - 互動藝術裝置</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #000; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; width: 100vw; height: 100vh; }
+        #canvas-container { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; background: #000; overflow: hidden; }
+        #video-source { display: none; }
+        #display-canvas { position: fixed; top: 0; left: 0; width: 100vw !important; height: 100vh !important; object-fit: cover; transform: translateZ(0); }
+        #debug-overlay { position: fixed; top: 20px; left: 20px; background: rgba(0, 0, 0, 0.8); color: #0f0; padding: 15px; font-family: 'Courier New', monospace; font-size: 14px; border-radius: 8px; z-index: 1000; display: none; pointer-events: none; }
+        #debug-overlay.active { display: block; }
+        #debug-overlay .debug-item { margin: 5px 0; }
+        #debug-overlay .debug-label { color: #0ff; }
+        #debug-overlay .debug-value { color: #fff; font-weight: bold; }
+        #connection-status { position: fixed; top: 20px; right: 20px; padding: 10px 20px; border-radius: 20px; font-size: 14px; font-weight: bold; z-index: 1000; display: none; }
+        #connection-status.connecting { background: #f59e0b; color: #fff; display: block; }
+        #connection-status.connected { background: #10b981; color: #fff; display: block; animation: fadeOut 2s forwards; }
+        #connection-status.disconnected { background: #ef4444; color: #fff; display: block; }
+        @keyframes fadeOut { 0%, 80% { opacity: 1; } 100% { opacity: 0; display: none; } }
+        #exhibition-info { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); color: #fff; padding: 15px 30px; border-radius: 30px; font-size: 18px; text-align: center; z-index: 1000; animation: pulse 2s infinite; display: none; }
+        #exhibition-info.active { display: block; }
+        @keyframes pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+        #loading-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 2000; color: #fff; }
+        #loading-overlay.hidden { display: none; }
+        .spinner { border: 4px solid rgba(255, 255, 255, 0.3); border-top: 4px solid #fff; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div id="loading-overlay"><div class="spinner"></div><p>正在初始化攝影機...</p></div>
+    <div id="canvas-container"><video id="video-source" autoplay playsinline></video><canvas id="display-canvas"></canvas></div>
+    <div id="debug-overlay">
+        <div class="debug-item"><span class="debug-label">連線狀態:</span> <span class="debug-value" id="debug-connection">未連線</span></div>
+        <div class="debug-item"><span class="debug-label">攝影機:</span> <span class="debug-value" id="debug-camera">未啟動</span></div>
+        <div class="debug-item"><span class="debug-label">偵測距離:</span> <span class="debug-value" id="debug-distance">-- cm</span></div>
+        <div class="debug-item"><span class="debug-label">偵測人數:</span> <span class="debug-value" id="debug-count">0</span></div>
+        <div class="debug-item"><span class="debug-label">影格解析度:</span> <span class="debug-value" id="debug-resolution">-- x --</span></div>
+        <div class="debug-item"><span class="debug-label">FPS:</span> <span class="debug-value" id="debug-fps">--</span></div>
+        <div class="debug-item"><span class="debug-label">模糊半徑:</span> <span class="debug-value" id="debug-blur">--</span></div>
+        <div class="debug-item"><span class="debug-label">圖層透明度:</span> <span class="debug-value" id="debug-opacity">--</span></div>
+    </div>
+    <div id="connection-status">連線中...</div>
+    <div id="exhibition-info">請靠近或遠離感應器,體驗影像解析度的變化</div>
+    <script src="flur_script.js"></script>
+</body>
+</html>

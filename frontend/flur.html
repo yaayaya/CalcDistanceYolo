@@ -5,687 +5,407 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FlurPaint - 互動藝術裝置</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            background: #000;
-            overflow: hidden;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 0;
-            width: 100vw;
-            height: 100vh;
-        }
-
-        #canvas-container {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background: #000;
-            overflow: hidden;
-        }
-
-        #display-canvas {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw !important;
-            height: 100vh !important;
-            object-fit: cover; /* 填滿整個螢幕，避免黑邊和跳動 */
-            image-rendering: pixelated; /* 低解析度時保持像素化效果 */
-            transform: translateZ(0); /* 啟用 GPU 加速，減少抖動 */
-            will-change: auto; /* 避免過度優化導致的問題 */
-        }
-
-        /* 除錯資訊覆蓋層 */
-        #debug-overlay {
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            background: rgba(0, 0, 0, 0.8);
-            color: #0f0;
-            padding: 15px;
-            font-family: 'Courier New', monospace;
-            font-size: 14px;
-            border-radius: 8px;
-            z-index: 1000;
-            display: none; /* 預設隱藏 */
-            pointer-events: none;
-        }
-
-        #debug-overlay.active {
-            display: block;
-        }
-
-        #debug-overlay .debug-item {
-            margin: 5px 0;
-        }
-
-        #debug-overlay .debug-label {
-            color: #0ff;
-        }
-
-        #debug-overlay .debug-value {
-            color: #fff;
-            font-weight: bold;
-        }
-
-        /* 連線狀態指示器 */
-        #connection-status {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 10px 20px;
-            border-radius: 20px;
-            font-size: 14px;
-            font-weight: bold;
-            z-index: 1000;
-            display: none;
-        }
-
-        #connection-status.connecting {
-            background: #f59e0b;
-            color: #fff;
-            display: block;
-        }
-
-        #connection-status.connected {
-            background: #10b981;
-            color: #fff;
-            display: block;
-            animation: fadeOut 2s forwards;
-        }
-
-        #connection-status.disconnected {
-            background: #ef4444;
-            color: #fff;
-            display: block;
-        }
-
-        @keyframes fadeOut {
-            0%, 80% {
-                opacity: 1;
-            }
-            100% {
-                opacity: 0;
-                display: none;
-            }
-        }
-
-        /* 展覽模式說明 */
-        #exhibition-info {
-            position: fixed;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            color: #fff;
-            padding: 15px 30px;
-            border-radius: 30px;
-            font-size: 18px;
-            text-align: center;
-            z-index: 1000;
-            animation: pulse 2s infinite;
-            display: none; /* 預設隱藏 */
-        }
-
-        #exhibition-info.active {
-            display: block;
-        }
-
-        @keyframes pulse {
-            0%, 100% {
-                opacity: 0.6;
-            }
-            50% {
-                opacity: 1;
-            }
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #000; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; width: 100vw; height: 100vh; }
+        #canvas-container { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; background: #000; overflow: hidden; }
+        #video-source { display: none; }
+        #display-canvas { position: fixed; top: 0; left: 0; width: 100vw !important; height: 100vh !important; object-fit: cover; transform: translateZ(0); }
+        #debug-overlay { position: fixed; top: 20px; left: 20px; background: rgba(0, 0, 0, 0.8); color: #0f0; padding: 15px; font-family: 'Courier New', monospace; font-size: 14px; border-radius: 8px; z-index: 1000; display: none; }
+        #debug-overlay.active { display: block; }
+        #debug-overlay .debug-item { margin: 5px 0; }
+        #debug-overlay .debug-label { color: #0ff; }
+        #debug-overlay .debug-value { color: #fff; font-weight: bold; }
+        #connection-status { position: fixed; top: 20px; right: 20px; padding: 10px 20px; border-radius: 20px; font-size: 14px; font-weight: bold; z-index: 1000; display: none; }
+        #connection-status.connecting { background: #f59e0b; color: #fff; display: block; }
+        #connection-status.connected { background: #10b981; color: #fff; display: block; animation: fadeOut 2s forwards; }
+        #connection-status.disconnected { background: #ef4444; color: #fff; display: block; }
+        @keyframes fadeOut { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
+        #exhibition-info { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); color: #fff; padding: 15px 30px; border-radius: 30px; font-size: 18px; text-align: center; z-index: 1000; animation: pulse 2s infinite; display: none; }
+        #exhibition-info.active { display: block; }
+        @keyframes pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+        #loading-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 2000; color: #fff; }
+        #loading-overlay.hidden { display: none; }
+        .spinner { border: 4px solid rgba(255, 255, 255, 0.3); border-top: 4px solid #fff; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
-    <!-- Canvas 顯示區 -->
-    <div id="canvas-container">
-        <canvas id="display-canvas"></canvas>
-    </div>
-
-    <!-- 除錯資訊覆蓋層 -->
+    <div id="loading-overlay"><div class="spinner"></div><p>正在初始化攝影機...</p></div>
+    <div id="canvas-container"><video id="video-source" autoplay playsinline></video><canvas id="display-canvas"></canvas></div>
     <div id="debug-overlay">
-        <div class="debug-item">
-            <span class="debug-label">連線狀態:</span>
-            <span class="debug-value" id="debug-connection">未連線</span>
-        </div>
-        <div class="debug-item">
-            <span class="debug-label">偵測距離:</span>
-            <span class="debug-value" id="debug-distance">-- cm</span>
-        </div>
-        <div class="debug-item">
-            <span class="debug-label">偵測人數:</span>
-            <span class="debug-value" id="debug-count">0</span>
-        </div>
-        <div class="debug-item">
-            <span class="debug-label">目標解析度:</span>
-            <span class="debug-value" id="debug-resolution">-- x --</span>
-        </div>
-        <div class="debug-item">
-            <span class="debug-label">當前解析度:</span>
-            <span class="debug-value" id="debug-current-res">-- x --</span>
-        </div>
-        <div class="debug-item">
-            <span class="debug-label">FPS:</span>
-            <span class="debug-value" id="debug-fps">--</span>
-        </div>
-        <div class="debug-item">
-            <span class="debug-label">JPEG 品質:</span>
-            <span class="debug-value" id="debug-quality">--</span>
-        </div>
-        <div class="debug-item">
-            <span class="debug-label">模糊半徑:</span>
-            <span class="debug-value" id="debug-blur">--</span>
-        </div>
-        <div class="debug-item">
-            <span class="debug-label">圖層透明度:</span>
-            <span class="debug-value" id="debug-opacity">--</span>
-        </div>
+        <div class="debug-item"><span class="debug-label">連線狀態:</span> <span class="debug-value" id="debug-connection">未連線</span></div>
+        <div class="debug-item"><span class="debug-label">攝影機:</span> <span class="debug-value" id="debug-camera">未啟動</span></div>
+        <div class="debug-item"><span class="debug-label">偵測距離:</span> <span class="debug-value" id="debug-distance">-- cm</span></div>
+        <div class="debug-item"><span class="debug-label">偵測人數:</span> <span class="debug-value" id="debug-count">0</span></div>
+        <div class="debug-item"><span class="debug-label">影格解析度:</span> <span class="debug-value" id="debug-resolution">-- x --</span></div>
+        <div class="debug-item"><span class="debug-label">FPS:</span> <span class="debug-value" id="debug-fps">--</span></div>
+        <div class="debug-item"><span class="debug-label">模糊半徑:</span> <span class="debug-value" id="debug-blur">--</span></div>
+        <div class="debug-item"><span class="debug-label">圖層透明度:</span> <span class="debug-value" id="debug-opacity">--</span></div>
     </div>
-
-    <!-- 連線狀態指示器 -->
     <div id="connection-status">連線中...</div>
-
-    <!-- 展覽模式說明 -->
-    <div id="exhibition-info">
-        請靠近或遠離感應器,體驗影像解析度的變化
-    </div>
-
+    <div id="exhibition-info">請靠近或遠離感應器,體驗影像解析度的變化</div>
     <script>
-        // ===== 全域變數 =====
-        let ws = null;
-        let config = null;
-        let canvas = null;
-        let ctx = null;
-        
-        // 當前影像解析度 (從後端接收)
-        let currentResolution = { width: 1920, height: 1080 };
-        
-        // 當前距離與模糊參數
-        let currentDistance = 0;
-        let targetDistance = 0;  // 目標距離
-        let smoothedDistance = 0; // 平滑後的距離
-        let currentBlurRadius = 0;
-        let currentOpacity = 0;
-        
-        // 距離平滑過渡配置（從 config 載入）
-        let DISTANCE_SMOOTH_SPEED = 0.15;
-        let DISTANCE_CHANGE_THRESHOLD = 10;
-        
-        // FPS 計算
-        let frameCount = 0;
-        let lastFpsUpdate = performance.now();
-        let currentFps = 0;
-        let lastFrameTime = 0;
+// FlurPaint 前端 - 使用 getUserMedia API 直接取得攝影機畫面
+// 僅接收後端距離資料，大幅提升效能
 
-        // ===== 初始化 =====
-        document.addEventListener('DOMContentLoaded', async () => {
-            canvas = document.getElementById('display-canvas');
-            ctx = canvas.getContext('2d', { alpha: false });
-            
-            // 載入配置
-            await loadConfig();
-            
-            // 套用顯示設定
-            applyDisplaySettings();
-            
-            // 建立 WebSocket 連線
-            connectWebSocket();
-            
-            // 繫定熱鍵
-            bindHotkeys();
+let ws=null,config=null,canvas=null,ctx=null,video=null,stream=null,animationFrameId=null;
+let currentDistance=0,targetDistance=0,smoothedDistance=0,currentBlurRadius=0,currentOpacity=0;
+let DISTANCE_SMOOTH_SPEED=.15,DISTANCE_CHANGE_THRESHOLD=10;
+let frameCount=0,lastFpsUpdate=performance.now(),currentFps=0;
+
+document.addEventListener('DOMContentLoaded',async()=>{
+    canvas=document.getElementById('display-canvas');
+    ctx=canvas.getContext('2d',{alpha:false,willReadFrequently:false});
+    video=document.getElementById('video-source');
+    await loadConfig();
+    applyDisplaySettings();
+    await initCamera();
+    connectWebSocket();
+    bindHotkeys();
+});
+
+async function loadConfig(){
+    try{
+        const response=await fetch('/api/project-config');
+        const result=await response.json();
+        if(result.status==='success'){
+            config=result.data;
+            if(config.distance_smoothing){
+                DISTANCE_SMOOTH_SPEED=config.distance_smoothing.smooth_speed||.15;
+                DISTANCE_CHANGE_THRESHOLD=config.distance_smoothing.change_threshold||10;
+            }
+            console.log('✅ 配置已載入');
+        }else{useDefaultConfig();}
+    }catch(error){
+        console.error('❌ 載入配置錯誤:',error);
+        useDefaultConfig();
+    }
+}
+
+function useDefaultConfig(){
+    config={
+        distance_mapping:{min_distance:50,max_distance:500,easing_function:"linear"},
+        display:{debug_mode:false,exhibition_mode:true},
+        flur_streaming:{enable_dynamic_resolution:true,min_resolution_scale:0.3,max_resolution_scale:1.0,enable_dynamic_quality:false,jpeg_quality:70,min_jpeg_quality:30,max_jpeg_quality:85,max_fps:30,frame_skip:1},
+        blur_overlay:{enabled:false,min_distance:70,max_distance:120,min_blur_radius:0,max_blur_radius:8,min_opacity:0,max_opacity:.3,overlay_color:"#888888",easing_function:"ease-out",layer_count:3,blend_mode:"normal"},
+        canvas_filter:{enabled:true,min_distance:70,max_distance:120,min_blur_radius:0,max_blur_radius:5,easing_function:"ease-out",noise_enabled:true,min_noise_intensity:0,max_noise_intensity:.08,noise_blend_mode:"overlay"},
+        distance_smoothing:{enabled:true,smooth_speed:.15,change_threshold:10}
+    };
+}
+
+async function initCamera(){
+    try{
+        const cameraResponse=await fetch('/api/camera-selection');
+        const cameraResult=await cameraResponse.json();
+        let cameraId=0;
+        if(cameraResult.status==='success'){
+            cameraId=cameraResult.data.selected_camera||0;
+            console.log(`📹 使用攝影機: ${cameraId}`);
+            updateDebugInfo('camera',`攝影機 ${cameraId}`);
+        }
+        const devices=await navigator.mediaDevices.enumerateDevices();
+        const videoDevices=devices.filter(device=>device.kind==='videoinput');
+        console.log('📹 可用攝影機:',videoDevices);
+        if(cameraId>=videoDevices.length){
+            console.warn(`⚠ 攝影機 ${cameraId} 不存在,使用預設攝影機`);
+            cameraId=0;
+        }
+        const constraints={
+            video:{
+                deviceId:videoDevices[cameraId]?.deviceId?{exact:videoDevices[cameraId].deviceId}:undefined,
+                width:{ideal:1920},
+                height:{ideal:1080},
+                frameRate:{ideal:30}
+            },
+            audio:false
+        };
+        stream=await navigator.mediaDevices.getUserMedia(constraints);
+        video.srcObject=stream;
+        await new Promise((resolve)=>{
+            video.onloadedmetadata=()=>{
+                console.log(`✅ 攝影機已啟動: ${video.videoWidth}x${video.videoHeight}`);
+                updateDebugInfo('camera',`${cameraId} (${video.videoWidth}x${video.videoHeight})`);
+                resolve();
+            };
         });
+        canvas.width=video.videoWidth;
+        canvas.height=video.videoHeight;
+        updateDebugInfo('resolution',`${canvas.width} x ${canvas.height}`);
+        document.getElementById('loading-overlay').classList.add('hidden');
+        startRenderLoop();
+    }catch(error){
+        console.error('❌ 攝影機啟動失敗:',error);
+        alert('無法啟動攝影機，請確認權限設定');
+        document.getElementById('loading-overlay').querySelector('p').textContent='攝影機啟動失敗';
+    }
+}
 
-        // ===== 載入配置 =====
-        async function loadConfig() {
-            try {
-                const response = await fetch('/api/project-config');
-                const result = await response.json();
-                
-                if (result.status === 'success') {
-                    config = result.data;
-                    
-                    // 載入距離平滑參數
-                    if (config.distance_smoothing) {
-                        DISTANCE_SMOOTH_SPEED = config.distance_smoothing.smooth_speed || 0.15;
-                        DISTANCE_CHANGE_THRESHOLD = config.distance_smoothing.change_threshold || 10;
-                    }
-                    
-                    console.log('✅ 配置已載入:', config);
-                    console.log(`📊 距離平滑: 速度=${DISTANCE_SMOOTH_SPEED}, 閾值=${DISTANCE_CHANGE_THRESHOLD}cm`);
-                } else {
-                    console.error('❌ 載入配置失敗');
-                    useDefaultConfig();
-                }
-            } catch (error) {
-                console.error('❌ 載入配置錯誤:', error);
-                useDefaultConfig();
-            }
+function applyDisplaySettings(){
+    const debugOverlay=document.getElementById('debug-overlay');
+    const exhibitionInfo=document.getElementById('exhibition-info');
+    if(config.display.debug_mode){
+        debugOverlay.classList.add('active');
+        exhibitionInfo.classList.remove('active');
+    }else if(config.display.exhibition_mode){
+        debugOverlay.classList.remove('active');
+        exhibitionInfo.classList.add('active');
+    }else{
+        debugOverlay.classList.remove('active');
+        exhibitionInfo.classList.remove('active');
+    }
+}
+
+function connectWebSocket(){
+    const protocol=window.location.protocol==='https:'?'wss:':'ws:';
+    const wsUrl=`${protocol}//${window.location.host}/ws/flur`;
+    updateConnectionUI('connecting');
+    try{
+        ws=new WebSocket(wsUrl);
+        ws.onopen=()=>{
+            console.log('✅ WebSocket 已連線');
+            updateConnectionUI('connected');
+            updateDebugInfo('connection','已連線');
+        };
+        ws.onmessage=(event)=>{
+            const data=JSON.parse(event.data);
+            handleDistanceData(data);
+        };
+        ws.onerror=(error)=>{
+            console.error('❌ WebSocket 錯誤:',error);
+            updateConnectionUI('disconnected');
+        };
+        ws.onclose=()=>{
+            console.log('⏹ WebSocket 已斷線');
+            updateConnectionUI('disconnected');
+            setTimeout(connectWebSocket,5000);
+        };
+    }catch(error){
+        console.error('❌ 建立 WebSocket 失敗:',error);
+        updateConnectionUI('disconnected');
+    }
+}
+
+function handleDistanceData(data){
+    if(data.type!=='distance_data')return;
+    targetDistance=data.distance||0;
+    if(smoothedDistance===0)smoothedDistance=targetDistance;
+    const distanceDiff=Math.abs(targetDistance-smoothedDistance);
+    if(distanceDiff>DISTANCE_CHANGE_THRESHOLD){
+        smoothedDistance+=(targetDistance-smoothedDistance)*DISTANCE_SMOOTH_SPEED;
+    }else{
+        smoothedDistance=targetDistance;
+    }
+    currentDistance=smoothedDistance;
+    updateDebugInfo('distance',`${targetDistance.toFixed(1)} cm → ${smoothedDistance.toFixed(1)} cm`);
+    updateDebugInfo('count',data.total_count||0);
+}
+
+function startRenderLoop(){
+    function render(){
+        drawFrame();
+        frameCount++;
+        const now=performance.now();
+        const elapsed=now-lastFpsUpdate;
+        if(elapsed>=1000){
+            currentFps=Math.round((frameCount*1000)/elapsed);
+            frameCount=0;
+            lastFpsUpdate=now;
+            updateDebugInfo('fps',currentFps);
         }
+        animationFrameId=requestAnimationFrame(render);
+    }
+    render();
+}
 
-        function useDefaultConfig() {
-            config = {
-                blur_control: {
-                    min_resolution_width: 320,
-                    max_resolution_width: 1920,
-                    acceleration_time: 500,
-                    deceleration_time: 1000,
-                    movement_threshold: 10,
-                    activation_delay: 200,
-                    deactivation_delay: 500,
-                    sample_rate: 30
-                },
-                distance_mapping: {
-                    min_distance: 50,
-                    max_distance: 500,
-                    easing_function: "linear"
-                },
-                display: {
-                    debug_mode: false,
-                    exhibition_mode: true,
-                    show_fps: false,
-                    show_distance: false
-                },
-                blur_overlay: {
-                    enabled: false,
-                    min_distance: 70,
-                    max_distance: 120,
-                    min_blur_radius: 0,
-                    max_blur_radius: 8,
-                    min_opacity: 0,
-                    max_opacity: 0.3,
-                    overlay_color: "#888888",
-                    easing_function: "ease-out",
-                    layer_count: 3,
-                    blend_mode: "normal"
-                },
-                canvas_filter: {
-                    enabled: true,
-                    min_distance: 70,
-                    max_distance: 120,
-                    min_blur_radius: 0,
-                    max_blur_radius: 5,
-                    easing_function: "ease-out",
-                    noise_enabled: true,
-                    min_noise_intensity: 0,
-                    max_noise_intensity: 0.08,
-                    noise_blend_mode: "overlay"
-                },
-                distance_smoothing: {
-                    enabled: true,
-                    smooth_speed: 0.15,
-                    change_threshold: 10
-                }
-            };
-        }
-
-        // ===== 套用顯示設定 =====
-        function applyDisplaySettings() {
-            const debugOverlay = document.getElementById('debug-overlay');
-            const exhibitionInfo = document.getElementById('exhibition-info');
-            
-            if (config.display.debug_mode) {
-                debugOverlay.classList.add('active');
-                exhibitionInfo.classList.remove('active');
-            } else if (config.display.exhibition_mode) {
-                debugOverlay.classList.remove('active');
-                exhibitionInfo.classList.add('active');
-            } else {
-                debugOverlay.classList.remove('active');
-                exhibitionInfo.classList.remove('active');
+function drawFrame(){
+    if(!video||video.readyState<2)return;
+    
+    // 藝術效果：動態解析度
+    let targetWidth=canvas.width;
+    let targetHeight=canvas.height;
+    if(config.flur_streaming&&config.flur_streaming.enable_dynamic_resolution){
+        const normalizedDistance=calculateNormalizedDistance(currentDistance,config.distance_mapping.min_distance,config.distance_mapping.max_distance);
+        const minScale=config.flur_streaming.min_resolution_scale||0.3;
+        const maxScale=config.flur_streaming.max_resolution_scale||1.0;
+        const resolutionScale=lerp(minScale,maxScale,normalizedDistance);
+        targetWidth=Math.floor(canvas.width*resolutionScale);
+        targetHeight=Math.floor(canvas.height*resolutionScale);
+        updateDebugInfo('resolution',`${targetWidth} x ${targetHeight} (${(resolutionScale*100).toFixed(0)}%)`);
+    }
+    
+    // 建立臨時 canvas 用於降低解析度
+    const tempCanvas=document.createElement('canvas');
+    tempCanvas.width=targetWidth;
+    tempCanvas.height=targetHeight;
+    const tempCtx=tempCanvas.getContext('2d',{alpha:false});
+    
+    // 繪製到臨時 canvas（降低解析度）
+    if(config.canvas_filter&&config.canvas_filter.enabled){
+        const filterConfig=config.canvas_filter;
+        const normalizedDistance=calculateNormalizedDistance(currentDistance,filterConfig.min_distance,filterConfig.max_distance);
+        const easedValue=applyEasing(normalizedDistance,filterConfig.easing_function||'ease-out');
+        const blurRadius=lerp(filterConfig.max_blur_radius,filterConfig.min_blur_radius,easedValue);
+        if(blurRadius>0)tempCtx.filter=`blur(${blurRadius}px)`;
+        tempCtx.drawImage(video,0,0,targetWidth,targetHeight);
+        tempCtx.filter='none';
+        updateDebugInfo('blur',`Canvas Filter: ${blurRadius.toFixed(1)} px`);
+    }else{
+        tempCtx.drawImage(video,0,0,targetWidth,targetHeight);
+    }
+    
+    // 藝術效果：動態 JPEG 品質（透過 canvas 壓縮重繪）
+    if(config.flur_streaming&&config.flur_streaming.enable_dynamic_quality){
+        const normalizedDistance=calculateNormalizedDistance(currentDistance,config.distance_mapping.min_distance,config.distance_mapping.max_distance);
+        const minQuality=config.flur_streaming.min_jpeg_quality||30;
+        const maxQuality=config.flur_streaming.max_jpeg_quality||85;
+        const quality=lerp(minQuality,maxQuality,normalizedDistance)/100;
+        
+        // 透過 JPEG 壓縮和解壓縮產生失真效果
+        const dataUrl=tempCanvas.toDataURL('image/jpeg',quality);
+        const img=new Image();
+        img.onload=()=>{
+            ctx.clearRect(0,0,canvas.width,canvas.height);
+            ctx.imageSmoothingEnabled=false;
+            ctx.drawImage(img,0,0,canvas.width,canvas.height);
+            if(config.canvas_filter&&config.canvas_filter.noise_enabled){
+                const filterConfig=config.canvas_filter;
+                const normalizedDistance=calculateNormalizedDistance(currentDistance,filterConfig.min_distance,filterConfig.max_distance);
+                const easedValue=applyEasing(normalizedDistance,filterConfig.easing_function||'ease-out');
+                const noiseIntensity=lerp(filterConfig.max_noise_intensity,filterConfig.min_noise_intensity,easedValue);
+                if(noiseIntensity>0)drawNoiseLayer(noiseIntensity,filterConfig.noise_blend_mode||'overlay');
             }
-        }
-
-        // ===== WebSocket 連線 =====
-        function connectWebSocket() {
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.host}/ws/flur`;
-            
-            updateConnectionUI('connecting');
-            
-            try {
-                ws = new WebSocket(wsUrl);
-                
-                ws.onopen = () => {
-                    console.log('✅ WebSocket 已連線');
-                    updateConnectionUI('connected');
-                    updateDebugInfo('connection', '已連線');
-                };
-                
-                ws.onmessage = (event) => {
-                    const data = JSON.parse(event.data);
-                    handleFrameData(data);
-                };
-                
-                ws.onerror = (error) => {
-                    console.error('❌ WebSocket 錯誤:', error);
-                    updateConnectionUI('disconnected');
-                    updateDebugInfo('connection', '連線錯誤');
-                };
-                
-                ws.onclose = () => {
-                    console.log('⏹ WebSocket 已斷線');
-                    updateConnectionUI('disconnected');
-                    updateDebugInfo('connection', '未連線');
-                    
-                    // 5秒後自動重連
-                    setTimeout(connectWebSocket, 5000);
-                };
-                
-            } catch (error) {
-                console.error('❌ 建立 WebSocket 失敗:', error);
-                updateConnectionUI('disconnected');
-            }
-        }
-
-        // ===== 處理影像幀資料 =====
-        function handleFrameData(data) {
-            if (data.type !== 'frame_data') return;
-            
-            // 更新目標距離（使用平滑過渡）
-            targetDistance = data.distance || 0;
-            
-            // 初始化平滑距離
-            if (smoothedDistance === 0) {
-                smoothedDistance = targetDistance;
-            }
-            
-            // 平滑距離過渡 (線性插值)
-            const distanceDiff = Math.abs(targetDistance - smoothedDistance);
-            if (distanceDiff > DISTANCE_CHANGE_THRESHOLD) {
-                // 距離變化較大時使用平滑過渡
-                smoothedDistance += (targetDistance - smoothedDistance) * DISTANCE_SMOOTH_SPEED;
-            } else {
-                // 距離變化小時直接使用目標距離
-                smoothedDistance = targetDistance;
-            }
-            
-            // 使用平滑後的距離
-            currentDistance = smoothedDistance;
-            
-            // 更新當前解析度 (從後端接收)
-            if (data.resolution) {
-                currentResolution = {
-                    width: data.resolution.width,
-                    height: data.resolution.height
-                };
-            }
-            
-            // 更新除錯資訊
-            updateDebugInfo('distance', `${targetDistance.toFixed(1)} cm → ${smoothedDistance.toFixed(1)} cm`);
-            updateDebugInfo('count', data.total_count || 0);
-            updateDebugInfo('resolution', `${currentResolution.width} x ${currentResolution.height}`);
-            updateDebugInfo('quality', data.quality || '--');
-            
-            // 解碼並繪製影像
-            const img = new Image();
-            img.onload = () => {
-                const now = performance.now();
-                
-                drawFrame(img);
-                
-                // 計算 FPS
-                frameCount++;
-                const elapsed = now - lastFpsUpdate;
-                if (elapsed >= 1000) {
-                    currentFps = Math.round((frameCount * 1000) / elapsed);
-                    frameCount = 0;
-                    lastFpsUpdate = now;
-                    updateDebugInfo('fps', currentFps);
-                }
-            };
-            img.src = 'data:image/jpeg;base64,' + data.image;
-        }
-
-        // ===== 繪製影像幀 =====
-        function drawFrame(img) {
-            // 檢查是否需要更新 Canvas 尺寸
-            const needsResize = canvas.width !== currentResolution.width || canvas.height !== currentResolution.height;
-            
-            if (needsResize) {
-                // 立即更新尺寸，不使用動畫或過渡
-                canvas.width = currentResolution.width;
-                canvas.height = currentResolution.height;
-            }
-            
-            // 套用 Canvas Filter 模糊（GPU 加速）
-            if (config.canvas_filter && config.canvas_filter.enabled) {
-                applyCanvasFilter(img);
-            } else {
-                // 繪製新影像，填滿整個 Canvas（自動覆蓋舊內容）
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            }
-            
-            // 繪製模糊圖層（如果啟用）
-            if (config.blur_overlay && config.blur_overlay.enabled) {
+            if(config.blur_overlay&&config.blur_overlay.enabled){
                 drawBlurOverlay();
             }
-            
-            // 更新除錯資訊
-            if (needsResize) {
-                updateDebugInfo('current-res', `${canvas.width} x ${canvas.height}`);
-            }
-        }
-
-        // ===== 繪製模糊圖層 =====
-        function drawBlurOverlay() {
-            const overlay = config.blur_overlay;
-            
-            // 計算當前距離對應的模糊參數
-            const normalizedDistance = calculateNormalizedDistance(
-                currentDistance,
-                overlay.min_distance,
-                overlay.max_distance
-            );
-            
-            // 使用緩動函數
-            const easedValue = applyEasing(normalizedDistance, overlay.easing_function);
-            
-            // 計算模糊半徑和透明度（距離越近，模糊越強）
-            currentBlurRadius = lerp(overlay.max_blur_radius, overlay.min_blur_radius, easedValue);
-            currentOpacity = lerp(overlay.max_opacity, overlay.min_opacity, easedValue);
-            
-            // 更新除錯資訊
-            updateDebugInfo('blur', `${currentBlurRadius.toFixed(1)} px`);
-            updateDebugInfo('opacity', `${(currentOpacity * 100).toFixed(1)}%`);
-            
-            // 只在有效果時繪製
-            if (currentBlurRadius > 0 && currentOpacity > 0) {
-                // 多層繪製以增強柔和效果
-                const layerCount = overlay.layer_count || 3;
-                const opacityPerLayer = currentOpacity / layerCount;
-                
-                for (let i = 0; i < layerCount; i++) {
-                    ctx.save();
-                    
-                    // 設定混合模式
-                    ctx.globalCompositeOperation = overlay.blend_mode || 'normal';
-                    ctx.globalAlpha = opacityPerLayer;
-                    
-                    // 設定模糊濾鏡
-                    const blurPerLayer = currentBlurRadius * (1 - i / layerCount * 0.3);
-                    ctx.filter = `blur(${blurPerLayer}px)`;
-                    
-                    // 繪製半透明色塊
-                    ctx.fillStyle = overlay.overlay_color || '#888888';
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-                    
-                    ctx.restore();
-                }
-                
-                // 重設濾鏡和透明度
-                ctx.filter = 'none';
-                ctx.globalAlpha = 1.0;
-                ctx.globalCompositeOperation = 'source-over';
-            }
-        }
-
-        // ===== 套用 Canvas Filter 模糊（GPU 加速）=====
-        function applyCanvasFilter(img) {
-            const filterConfig = config.canvas_filter;
-            
-            // 計算當前距離對應的模糊參數
-            const normalizedDistance = calculateNormalizedDistance(
-                currentDistance,
-                filterConfig.min_distance,
-                filterConfig.max_distance
-            );
-            
-            // 使用緩動函數
-            const easedValue = applyEasing(normalizedDistance, filterConfig.easing_function || 'ease-out');
-            
-            // 計算模糊半徑（距離越近，模糊越強）
-            const blurRadius = lerp(filterConfig.max_blur_radius, filterConfig.min_blur_radius, easedValue);
-            
-            // 套用 Canvas filter（GPU 加速）
-            ctx.save();
-            if (blurRadius > 0) {
-                ctx.filter = `blur(${blurRadius}px)`;
-            }
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            ctx.filter = 'none';
-            ctx.restore();
-            
-            // 疊加噪點層（增強細節）
-            if (filterConfig.noise_enabled) {
-                const noiseIntensity = lerp(
-                    filterConfig.max_noise_intensity,
-                    filterConfig.min_noise_intensity,
-                    easedValue
-                );
-                if (noiseIntensity > 0) {
-                    drawNoiseLayer(noiseIntensity, filterConfig.noise_blend_mode || 'overlay');
-                }
-            }
-            
-            // 更新除錯資訊
-            updateDebugInfo('blur', `Canvas Filter: ${blurRadius.toFixed(1)} px`);
-        }
-
-        // ===== 繪製噪點層 =====
-        let noiseCanvas = null;
-        let noiseCtx = null;
+        };
+        img.src=dataUrl;
+    }else{
+        // 不使用 JPEG 壓縮，直接放大繪製
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        ctx.imageSmoothingEnabled=false;
+        ctx.drawImage(tempCanvas,0,0,canvas.width,canvas.height);
         
-        function drawNoiseLayer(intensity, blendMode) {
-            // 使用離屏 Canvas 快取噪點，提升效能
-            if (!noiseCanvas || noiseCanvas.width !== canvas.width || noiseCanvas.height !== canvas.height) {
-                noiseCanvas = document.createElement('canvas');
-                noiseCanvas.width = canvas.width;
-                noiseCanvas.height = canvas.height;
-                noiseCtx = noiseCanvas.getContext('2d', { alpha: false });
-            }
-            
-            // 建立噪點圖案（降低解析度以提升效能）
-            const scale = 0.5; // 噪點解析度縮放
-            const noiseData = noiseCtx.createImageData(canvas.width * scale, canvas.height * scale);
-            const pixels = noiseData.data;
-            const intensityValue = 255 * intensity;
-            
-            // 批次生成噪點
-            for (let i = 0; i < pixels.length; i += 4) {
-                const noise = (Math.random() - 0.5) * intensityValue;
-                const gray = 128 + noise;
-                pixels[i] = gray;     // R
-                pixels[i + 1] = gray; // G
-                pixels[i + 2] = gray; // B
-                pixels[i + 3] = 255;  // A
-            }
-            
-            // 將噪點繪製到離屏 Canvas
-            noiseCtx.putImageData(noiseData, 0, 0);
-            
-            // 疊加噪點到主 Canvas
+        if(config.canvas_filter&&config.canvas_filter.noise_enabled){
+            const filterConfig=config.canvas_filter;
+            const normalizedDistance=calculateNormalizedDistance(currentDistance,filterConfig.min_distance,filterConfig.max_distance);
+            const easedValue=applyEasing(normalizedDistance,filterConfig.easing_function||'ease-out');
+            const noiseIntensity=lerp(filterConfig.max_noise_intensity,filterConfig.min_noise_intensity,easedValue);
+            if(noiseIntensity>0)drawNoiseLayer(noiseIntensity,filterConfig.noise_blend_mode||'overlay');
+        }
+        
+        if(config.blur_overlay&&config.blur_overlay.enabled){
+            drawBlurOverlay();
+        }
+    }
+}
+
+function drawBlurOverlay(){
+    const overlay=config.blur_overlay;
+    const normalizedDistance=calculateNormalizedDistance(currentDistance,overlay.min_distance,overlay.max_distance);
+    const easedValue=applyEasing(normalizedDistance,overlay.easing_function);
+    currentBlurRadius=lerp(overlay.max_blur_radius,overlay.min_blur_radius,easedValue);
+    currentOpacity=lerp(overlay.max_opacity,overlay.min_opacity,easedValue);
+    updateDebugInfo('blur',`${currentBlurRadius.toFixed(1)} px`);
+    updateDebugInfo('opacity',`${(currentOpacity*100).toFixed(1)}%`);
+    if(currentBlurRadius>0&&currentOpacity>0){
+        const layerCount=overlay.layer_count||3;
+        const opacityPerLayer=currentOpacity/layerCount;
+        for(let i=0;i<layerCount;i++){
             ctx.save();
-            ctx.globalCompositeOperation = blendMode;
-            ctx.drawImage(noiseCanvas, 0, 0, canvas.width, canvas.height);
+            ctx.globalCompositeOperation=overlay.blend_mode||'normal';
+            ctx.globalAlpha=opacityPerLayer;
+            const blurPerLayer=currentBlurRadius*(1-i/layerCount*.3);
+            ctx.filter=`blur(${blurPerLayer}px)`;
+            ctx.fillStyle=overlay.overlay_color||'#888888';
+            ctx.fillRect(0,0,canvas.width,canvas.height);
             ctx.restore();
-            ctx.globalCompositeOperation = 'source-over';
         }
+        ctx.filter='none';
+        ctx.globalAlpha=1.0;
+        ctx.globalCompositeOperation='source-over';
+    }
+}
 
-        // ===== 計算正規化距離 (0-1) =====
-        function calculateNormalizedDistance(distance, minDist, maxDist) {
-            if (distance <= minDist) return 0;
-            if (distance >= maxDist) return 1;
-            return (distance - minDist) / (maxDist - minDist);
-        }
+let noiseCanvas=null,noiseCtx=null;
+function drawNoiseLayer(intensity,blendMode){
+    if(!noiseCanvas||noiseCanvas.width!==canvas.width||noiseCanvas.height!==canvas.height){
+        noiseCanvas=document.createElement('canvas');
+        noiseCanvas.width=canvas.width;
+        noiseCanvas.height=canvas.height;
+        noiseCtx=noiseCanvas.getContext('2d',{alpha:false});
+    }
+    const scale=.5;
+    const noiseData=noiseCtx.createImageData(canvas.width*scale,canvas.height*scale);
+    const pixels=noiseData.data;
+    const intensityValue=255*intensity;
+    for(let i=0;i<pixels.length;i+=4){
+        const noise=(Math.random()-.5)*intensityValue;
+        const gray=128+noise;
+        pixels[i]=gray;
+        pixels[i+1]=gray;
+        pixels[i+2]=gray;
+        pixels[i+3]=255;
+    }
+    noiseCtx.putImageData(noiseData,0,0);
+    ctx.save();
+    ctx.globalCompositeOperation=blendMode;
+    ctx.drawImage(noiseCanvas,0,0,canvas.width,canvas.height);
+    ctx.restore();
+    ctx.globalCompositeOperation='source-over';
+}
 
-        // ===== 緩動函數 =====
-        function applyEasing(t, easingType) {
-            switch (easingType) {
-                case 'linear':
-                    return t;
-                case 'ease-in':
-                    return t * t;
-                case 'ease-out':
-                    return 1 - Math.pow(1 - t, 2);
-                case 'ease-in-out':
-                    return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-                default:
-                    return t;
-            }
-        }
+function calculateNormalizedDistance(distance,minDist,maxDist){
+    if(distance<=minDist)return 0;
+    if(distance>=maxDist)return 1;
+    return(distance-minDist)/(maxDist-minDist);
+}
 
-        // ===== 線性插值 =====
-        function lerp(start, end, t) {
-            return start + (end - start) * t;
-        }
+function applyEasing(t,easingType){
+    switch(easingType){
+        case 'linear':return t;
+        case 'ease-in':return t*t;
+        case 'ease-out':return 1-Math.pow(1-t,2);
+        case 'ease-in-out':return t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+        default:return t;
+    }
+}
 
-        // ===== 更新連線狀態 UI =====
-        function updateConnectionUI(status) {
-            const statusElement = document.getElementById('connection-status');
-            statusElement.className = status;
-            
-            const statusText = {
-                'connecting': '連線中...',
-                'connected': '已連線',
-                'disconnected': '連線中斷'
-            };
-            
-            statusElement.textContent = statusText[status] || '未知狀態';
-        }
+function lerp(start,end,t){
+    return start+(end-start)*t;
+}
 
-        // ===== 更新除錯資訊 =====
-        function updateDebugInfo(key, value) {
-            const element = document.getElementById(`debug-${key}`);
-            if (element) {
-                element.textContent = value;
-            }
-        }
+function updateConnectionUI(status){
+    const statusElement=document.getElementById('connection-status');
+    statusElement.className=status;
+    const statusText={'connecting':'連線中...','connected':'已連線','disconnected':'連線中斷'};
+    statusElement.textContent=statusText[status]||'未知狀態';
+}
 
-        // ===== 綁定熱鍵 =====
-        function bindHotkeys() {
-            document.addEventListener('keydown', (e) => {
-                // Ctrl+Shift+D: 切換除錯模式
-                if (e.ctrlKey && e.shiftKey && e.key === 'D') {
-                    config.display.debug_mode = !config.display.debug_mode;
-                    applyDisplaySettings();
-                    e.preventDefault();
-                }
-                
-                // Ctrl+Shift+E: 切換展覽模式
-                if (e.ctrlKey && e.shiftKey && e.key === 'E') {
-                    config.display.exhibition_mode = !config.display.exhibition_mode;
-                    applyDisplaySettings();
-                    e.preventDefault();
-                }
-            });
+function updateDebugInfo(key,value){
+    const element=document.getElementById(`debug-${key}`);
+    if(element)element.textContent=value;
+}
+
+function bindHotkeys(){
+    document.addEventListener('keydown',(e)=>{
+        if(e.ctrlKey&&e.shiftKey&&e.key==='D'){
+            config.display.debug_mode=!config.display.debug_mode;
+            applyDisplaySettings();
+            e.preventDefault();
         }
+        if(e.ctrlKey&&e.shiftKey&&e.key==='E'){
+            config.display.exhibition_mode=!config.display.exhibition_mode;
+            applyDisplaySettings();
+            e.preventDefault();
+        }
+    });
+}
+
+window.addEventListener('beforeunload',()=>{
+    if(animationFrameId)cancelAnimationFrame(animationFrameId);
+    if(stream)stream.getTracks().forEach(track=>track.stop());
+    if(ws)ws.close();
+});
     </script>
 </body>
 </html>
