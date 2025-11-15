@@ -131,6 +131,9 @@ class DistanceCalculator:
         
     def calculate_distance(self, box_height, box_width, track_id=None):
         """計算距離"""
+        if box_height <= 0:
+            return 0
+            
         focal_length = self.config["distance"]["focal_length"]
         person_height = self.config["distance"]["real_person_height"]
         
@@ -146,7 +149,7 @@ class DistanceCalculator:
             person_height *= height_factor
         
         # 計算距離
-        distance = (person_height * focal_length) / box_height if box_height > 0 else 0
+        distance = (person_height * focal_length) / box_height
         
         # 數據平滑化
         if self.config["distance"].get("use_smoothing", True) and track_id is not None:

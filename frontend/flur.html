@@ -20,9 +20,6 @@
         #connection-status.connected { background: #10b981; color: #fff; display: block; animation: fadeOut 2s forwards; }
         #connection-status.disconnected { background: #ef4444; color: #fff; display: block; }
         @keyframes fadeOut { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
-        #exhibition-info { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); color: #fff; padding: 15px 30px; border-radius: 30px; font-size: 18px; text-align: center; z-index: 1000; animation: pulse 2s infinite; display: none; }
-        #exhibition-info.active { display: block; }
-        @keyframes pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
         #loading-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 2000; color: #fff; }
         #loading-overlay.hidden { display: none; }
         .spinner { border: 4px solid rgba(255, 255, 255, 0.3); border-top: 4px solid #fff; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px; }
@@ -43,14 +40,13 @@
         <div class="debug-item"><span class="debug-label">圖層透明度:</span> <span class="debug-value" id="debug-opacity">--</span></div>
     </div>
     <div id="connection-status">連線中...</div>
-    <div id="exhibition-info">請靠近或遠離感應器,體驗影像解析度的變化</div>
     <script>
 // FlurPaint 前端 - 使用 getUserMedia API 直接取得攝影機畫面
 // 僅接收後端距離資料，大幅提升效能
 
 let ws=null,config=null,canvas=null,ctx=null,video=null,stream=null,animationFrameId=null;
 let currentDistance=0,targetDistance=0,smoothedDistance=0,currentBlurRadius=0,currentOpacity=0;
-let DISTANCE_SMOOTH_SPEED=.15,DISTANCE_CHANGE_THRESHOLD=10;
+let SMOOTHING_FACTOR=0.3;  // 使用 DistanceSpeed 的平滑因子 (0.3 = 30% 新值, 70% 舊值)
 let frameCount=0,lastFpsUpdate=performance.now(),currentFps=0;
 
 document.addEventListener('DOMContentLoaded',async()=>{
@@ -70,9 +66,8 @@ async function loadConfig(){
         const result=await response.json();
         if(result.status==='success'){
             config=result.data;
-            if(config.distance_smoothing){
-                DISTANCE_SMOOTH_SPEED=config.distance_smoothing.smooth_speed||.15;
-                DISTANCE_CHANGE_THRESHOLD=config.distance_smoothing.change_threshold||10;
+            if(config.distance&&config.distance.smoothingFactor!==undefined){
+                SMOOTHING_FACTOR=config.distance.smoothingFactor;
             }
             console.log('✅ 配置已載入');
         }else{useDefaultConfig();}
@@ -89,7 +84,7 @@ function useDefaultConfig(){
         flur_streaming:{enable_dynamic_resolution:true,min_resolution_scale:0.3,max_resolution_scale:1.0,enable_dynamic_quality:false,jpeg_quality:70,min_jpeg_quality:30,max_jpeg_quality:85,max_fps:30,frame_skip:1},
         blur_overlay:{enabled:false,min_distance:70,max_distance:120,min_blur_radius:0,max_blur_radius:8,min_opacity:0,max_opacity:.3,overlay_color:"#888888",easing_function:"ease-out",layer_count:3,blend_mode:"normal"},
         canvas_filter:{enabled:true,min_distance:70,max_distance:120,min_blur_radius:0,max_blur_radius:5,easing_function:"ease-out",noise_enabled:true,min_noise_intensity:0,max_noise_intensity:.08,noise_blend_mode:"overlay"},
-        distance_smoothing:{enabled:true,smooth_speed:.15,change_threshold:10}
+        distance:{smoothingFactor:0.3}  // DistanceSpeed 平滑因子
     };
 }
 
@@ -142,16 +137,20 @@ async function initCamera(){
 
 function applyDisplaySettings(){
     const debugOverlay=document.getElementById('debug-overlay');
-    const exhibitionInfo=document.getElementById('exhibition-info');
+    const connectionStatus=document.getElementById('connection-status');
+    
     if(config.display.debug_mode){
+        // 除錯模式：顯示除錯資訊和連線狀態
         debugOverlay.classList.add('active');
-        exhibitionInfo.classList.remove('active');
+        connectionStatus.style.display='';
     }else if(config.display.exhibition_mode){
+        // 展覽模式：完全乾淨，隱藏所有 UI
         debugOverlay.classList.remove('active');
-        exhibitionInfo.classList.add('active');
+        connectionStatus.style.display='none';
     }else{
+        // 一般模式：只顯示連線狀態
         debugOverlay.classList.remove('active');
-        exhibitionInfo.classList.remove('active');
+        connectionStatus.style.display='';
     }
 }
 
@@ -187,36 +186,38 @@ function connectWebSocket(){
 
 function handleDistanceData(data){
     if(data.type!=='distance_data')return;
-    targetDistance=data.distance||0;
+    
+    // 取得後端傳來的原始距離
+    const rawDistance=data.distance||0;
     const personCount=data.total_count||0;
     const isRecovering=data.is_recovering||false;
     
-    // 後端已處理離開延遲與恢復機制，前端直接使用接收到的距離
-    // 不再需要前端判斷 hasValidDetection
-    
-    // 平滑處理：初始化時立即同步
-    if(smoothedDistance===0)smoothedDistance=targetDistance;
-    
-    // 距離差異大於閾值時才進行平滑
-    const distanceDiff=Math.abs(targetDistance-smoothedDistance);
-    if(distanceDiff>DISTANCE_CHANGE_THRESHOLD){
-        smoothedDistance+=(targetDistance-smoothedDistance)*DISTANCE_SMOOTH_SPEED;
+    // 使用 DistanceSpeed 的指數移動平均 (EMA) 演算法
+    // 比線性插值更穩定，不會飄來飄去
+    if(smoothedDistance===0){
+        // 初始化：直接使用原始距離
+        smoothedDistance=rawDistance;
     }else{
-        smoothedDistance=targetDistance;
+        // 指數平滑：smoothed = old * (1 - factor) + new * factor
+        // factor = 0.3 表示新值佔 30%，舊值佔 70%
+        smoothedDistance=smoothedDistance*(1-SMOOTHING_FACTOR)+rawDistance*SMOOTHING_FACTOR;
     }
     
+    // 使用平滑後的距離作為當前距離
     currentDistance=smoothedDistance;
+    targetDistance=rawDistance;
     
     // 除錯資訊顯示
-    let debugDistance=`${targetDistance.toFixed(1)} cm`;
+    let debugDistance=`${rawDistance.toFixed(1)} cm`;
     if(isRecovering){
-        debugDistance+=` (恢復中 → ${smoothedDistance.toFixed(1)} cm)`;
-    }else if(smoothedDistance!==targetDistance){
-        debugDistance+=` → ${smoothedDistance.toFixed(1)} cm`;
+        debugDistance+=` (恢復中)`;
+    }
+    if(Math.abs(smoothedDistance-rawDistance)>1){
+        debugDistance+=` → 平滑: ${smoothedDistance.toFixed(1)} cm`;
     }
     
     updateDebugInfo('distance',debugDistance);
-    updateDebugInfo('count',data.total_count||0);
+    updateDebugInfo('count',personCount);
 }
 
 function startRenderLoop(){

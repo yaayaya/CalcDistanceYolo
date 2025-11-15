@@ -11,8 +11,8 @@
     "sample_rate": 20
   },
   "distance_mapping": {
-    "min_distance": 100,
-    "max_distance": 200,
+    "min_distance": 130,
+    "max_distance": 270,
     "easing_function": "linear"
   },
   "flur_streaming": {
@@ -41,7 +41,7 @@
   },
   "display": {
     "debug_mode": true,
-    "exhibition_mode": false,
+    "exhibition_mode": true,
     "show_fps": true,
     "show_distance": true
   },
@@ -60,8 +60,8 @@
   },
   "canvas_filter": {
     "enabled": true,
-    "min_distance": 100,
-    "max_distance": 200,
+    "min_distance": 130,
+    "max_distance": 270,
     "min_blur_radius": 0,
     "max_blur_radius": 12,
     "easing_function": "ease-out",
