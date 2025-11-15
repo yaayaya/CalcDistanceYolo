@@ -331,7 +331,13 @@
                     <div class="form-group">
                         <label for="deactivation-delay">停止延遲 (ms)</label>
                         <input type="number" id="deactivation-delay" min="0" max="2000" step="50">
-                        <small>人體離開後延遲停止的時間</small>
+                        <small>人體離開後延遲停止的時間（距離=0倒數時間）</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="recovery-speed">恢復速度</label>
+                        <input type="number" id="recovery-speed" min="0.01" max="0.5" step="0.01">
+                        <small>倒數結束後恢復到清晰的速度 (0.01=慢, 0.2=快)</small>
                     </div>
 
                     <div class="form-group">
@@ -842,6 +848,7 @@
             document.getElementById('movement-threshold').value = config.blur_control.movement_threshold;
             document.getElementById('activation-delay').value = config.blur_control.activation_delay;
             document.getElementById('deactivation-delay').value = config.blur_control.deactivation_delay;
+            document.getElementById('recovery-speed').value = config.blur_control.recovery_speed || 0.08;
             document.getElementById('sample-rate').value = config.blur_control.sample_rate;
 
             // 距離映射
@@ -921,6 +928,7 @@
                         movement_threshold: parseInt(document.getElementById('movement-threshold').value),
                         activation_delay: parseInt(document.getElementById('activation-delay').value),
                         deactivation_delay: parseInt(document.getElementById('deactivation-delay').value),
+                        recovery_speed: parseFloat(document.getElementById('recovery-speed').value),
                         sample_rate: parseInt(document.getElementById('sample-rate').value)
                     },
                     distance_mapping: {

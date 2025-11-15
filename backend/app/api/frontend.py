@@ -338,3 +338,60 @@ async def update_camera_selection(camera_id: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"更新攝影機設定失敗: {str(e)}")
 
+
+@router.get("/distance-recovery-config", response_model=ApiResponse)
+async def get_distance_recovery_config():
+    """
+    取得距離恢復機制配置
+    
+    Returns:
+        distance_recovery 的設定內容
+    """
+    try:
+        config = load_project_config()
+        recovery_config = config.get("distance_recovery", {})
+        
+        return ApiResponse(
+            status="success",
+            message="成功取得距離恢復機制配置",
+            data=recovery_config
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"讀取距離恢復機制配置失敗: {str(e)}")
+
+
+@router.put("/distance-recovery-config", response_model=ApiResponse)
+async def update_distance_recovery_config(config: Dict[str, Any]):
+    """
+    更新距離恢復機制配置
+    
+    Args:
+        config: 新的距離恢復機制配置
+        
+    Returns:
+        更新結果
+    """
+    try:
+        project_config = load_project_config()
+        
+        # 更新 distance_recovery 區塊
+        if "distance_recovery" not in project_config:
+            project_config["distance_recovery"] = {}
+        
+        project_config["distance_recovery"].update(config)
+        
+        # 儲存配置
+        success = save_project_config(project_config)
+        
+        if success:
+            return ApiResponse(
+                status="success",
+                message="距離恢復機制配置已更新",
+                data=project_config["distance_recovery"]
+            )
+        else:
+            raise HTTPException(status_code=500, detail="儲存距離恢復機制配置失敗")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"更新距離恢復機制配置失敗: {str(e)}")
+

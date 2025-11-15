@@ -188,15 +188,34 @@ function connectWebSocket(){
 function handleDistanceData(data){
     if(data.type!=='distance_data')return;
     targetDistance=data.distance||0;
+    const personCount=data.total_count||0;
+    const isRecovering=data.is_recovering||false;
+    
+    // 後端已處理離開延遲與恢復機制，前端直接使用接收到的距離
+    // 不再需要前端判斷 hasValidDetection
+    
+    // 平滑處理：初始化時立即同步
     if(smoothedDistance===0)smoothedDistance=targetDistance;
+    
+    // 距離差異大於閾值時才進行平滑
     const distanceDiff=Math.abs(targetDistance-smoothedDistance);
     if(distanceDiff>DISTANCE_CHANGE_THRESHOLD){
         smoothedDistance+=(targetDistance-smoothedDistance)*DISTANCE_SMOOTH_SPEED;
     }else{
         smoothedDistance=targetDistance;
     }
+    
     currentDistance=smoothedDistance;
-    updateDebugInfo('distance',`${targetDistance.toFixed(1)} cm → ${smoothedDistance.toFixed(1)} cm`);
+    
+    // 除錯資訊顯示
+    let debugDistance=`${targetDistance.toFixed(1)} cm`;
+    if(isRecovering){
+        debugDistance+=` (恢復中 → ${smoothedDistance.toFixed(1)} cm)`;
+    }else if(smoothedDistance!==targetDistance){
+        debugDistance+=` → ${smoothedDistance.toFixed(1)} cm`;
+    }
+    
+    updateDebugInfo('distance',debugDistance);
     updateDebugInfo('count',data.total_count||0);
 }
 

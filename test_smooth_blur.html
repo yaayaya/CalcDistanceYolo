@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>平滑模糊轉移測試</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'SF Pro', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #1a1a1a;
+            color: #ffffff;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #4a9eff;
+            margin-bottom: 10px;
+        }
+        .info {
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .test-controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .control-group {
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #aaa;
+            font-size: 12px;
+        }
+        .control-group input[type="range"] {
+            width: 100%;
+        }
+        .control-group .value-display {
+            color: #4a9eff;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        button {
+            background: #4a9eff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #3a8eef;
+        }
+        button:active {
+            background: #2a7edf;
+        }
+        .status-display {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .status-item {
+            background: #2a2a2a;
+            padding: 12px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .status-item .label {
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 5px;
+        }
+        .status-item .value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #4a9eff;
+        }
+        .scenario-buttons {
+            margin-top: 15px;
+        }
+        .log {
+            background: #1a1a1a;
+            border: 1px solid #3a3a3a;
+            border-radius: 6px;
+            padding: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: 'Monaco', monospace;
+            font-size: 12px;
+            margin-top: 20px;
+        }
+        .log-entry {
+            padding: 3px 0;
+            border-bottom: 1px solid #2a2a2a;
+        }
+        .log-entry.detection {
+            color: #4a9eff;
+        }
+        .log-entry.transition {
+            color: #ffa500;
+        }
+        .log-entry.info {
+            color: #888;
+        }
+        .active-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .active-indicator.on {
+            background: #00ff00;
+            box-shadow: 0 0 10px #00ff00;
+        }
+        .active-indicator.off {
+            background: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 平滑模糊轉移測試工具</h1>
+        <div class="info">
+            <p>此工具用於測試前端模糊平滑過渡功能,不需要連接後端或攝影機。</p>
+            <p>使用下方控制器模擬不同的偵測場景,觀察模糊參數的平滑變化。</p>
+        </div>
+
+        <div class="test-controls">
+            <div class="control-group">
+                <label>模擬距離 (cm)</label>
+                <input type="range" id="simulatedDistance" min="0" max="150" value="0" step="1">
+                <div class="value-display"><span id="distanceValue">0</span> cm</div>
+            </div>
+
+            <div class="control-group">
+                <label>偵測人數</label>
+                <input type="range" id="personCount" min="0" max="5" value="0" step="1">
+                <div class="value-display"><span id="countValue">0</span> 人</div>
+            </div>
+
+            <div class="control-group">
+                <label>平滑速度</label>
+                <input type="range" id="smoothSpeed" min="0.01" max="0.5" value="0.12" step="0.01">
+                <div class="value-display"><span id="smoothSpeedValue">0.12</span></div>
+            </div>
+
+            <div class="control-group">
+                <label>停用延遲 (ms)</label>
+                <input type="range" id="deactivationDelay" min="0" max="2000" value="750" step="50">
+                <div class="value-display"><span id="delayValue">750</span> ms</div>
+            </div>
+        </div>
+
+        <div class="scenario-buttons">
+            <h3>快速測試場景</h3>
+            <button onclick="scenario_personAppear()">👤 人物出現</button>
+            <button onclick="scenario_personDisappear()">🚶 人物離開</button>
+            <button onclick="scenario_distanceZero()">⚠️ 距離變0 (人數保持)</button>
+            <button onclick="scenario_rapidMovement()">⚡ 快速移動</button>
+            <button onclick="scenario_flickering()">✨ 閃爍測試</button>
+            <button onclick="scenario_reset()">🔄 重置</button>
+        </div>
+
+        <div class="status-display">
+            <div class="status-item">
+                <div class="label">偵測狀態</div>
+                <div class="value">
+                    <span class="active-indicator" id="detectionIndicator"></span>
+                    <span id="detectionStatus">待機</span>
+                </div>
+            </div>
+            <div class="status-item">
+                <div class="label">目標距離</div>
+                <div class="value"><span id="targetDistance">0</span> cm</div>
+            </div>
+            <div class="status-item">
+                <div class="label">平滑距離</div>
+                <div class="value"><span id="smoothedDistance">0</span> cm</div>
+            </div>
+            <div class="status-item">
+                <div class="label">目標模糊</div>
+                <div class="value"><span id="targetBlur">0</span> px</div>
+            </div>
+            <div class="status-item">
+                <div class="label">當前模糊</div>
+                <div class="value"><span id="currentBlur">0</span> px</div>
+            </div>
+            <div class="status-item">
+                <div class="label">過渡進度</div>
+                <div class="value"><span id="transitionProgress">0</span>%</div>
+            </div>
+        </div>
+
+        <div class="log" id="logContainer">
+            <div class="log-entry info">📋 測試日誌將顯示在這裡...</div>
+        </div>
+    </div>
+
+    <script>
+        // 模擬前端平滑邏輯
+        let targetDistance = 0;
+        let smoothedDistance = 0;
+        let currentBlurRadius = 0;
+        let targetBlurRadius = 0;
+
+        let lastValidDetectionTime = 0;
+        let isDetectionActive = false;
+        let detectionLostTime = 0;
+
+        let BLUR_SMOOTH_SPEED = 0.12;
+        let DISTANCE_SMOOTH_SPEED = 0.15;
+        let ACTIVATION_DELAY = 200;
+        let DEACTIVATION_DELAY = 750;
+        let DISTANCE_CHANGE_THRESHOLD = 10;
+
+        // 配置
+        const config = {
+            min_distance: 60,
+            max_distance: 80,
+            min_blur: 0,
+            max_blur: 12
+        };
+
+        // UI 元素
+        const elements = {
+            simulatedDistance: document.getElementById('simulatedDistance'),
+            personCount: document.getElementById('personCount'),
+            smoothSpeed: document.getElementById('smoothSpeed'),
+            deactivationDelay: document.getElementById('deactivationDelay'),
+            distanceValue: document.getElementById('distanceValue'),
+            countValue: document.getElementById('countValue'),
+            smoothSpeedValue: document.getElementById('smoothSpeedValue'),
+            delayValue: document.getElementById('delayValue'),
+            detectionStatus: document.getElementById('detectionStatus'),
+            detectionIndicator: document.getElementById('detectionIndicator'),
+            targetDistance: document.getElementById('targetDistance'),
+            smoothedDistance: document.getElementById('smoothedDistance'),
+            targetBlur: document.getElementById('targetBlur'),
+            currentBlur: document.getElementById('currentBlur'),
+            transitionProgress: document.getElementById('transitionProgress'),
+            logContainer: document.getElementById('logContainer')
+        };
+
+        // 綁定控制器
+        elements.simulatedDistance.addEventListener('input', updateValues);
+        elements.personCount.addEventListener('input', updateValues);
+        elements.smoothSpeed.addEventListener('input', (e) => {
+            BLUR_SMOOTH_SPEED = parseFloat(e.target.value);
+            elements.smoothSpeedValue.textContent = BLUR_SMOOTH_SPEED.toFixed(2);
+        });
+        elements.deactivationDelay.addEventListener('input', (e) => {
+            DEACTIVATION_DELAY = parseInt(e.target.value);
+            elements.delayValue.textContent = DEACTIVATION_DELAY;
+        });
+
+        function updateValues() {
+            const distance = parseInt(elements.simulatedDistance.value);
+            const count = parseInt(elements.personCount.value);
+            elements.distanceValue.textContent = distance;
+            elements.countValue.textContent = count;
+        }
+
+        // 模擬距離資料處理
+        function handleDistanceData() {
+            const now = performance.now();
+            const receivedDistance = parseInt(elements.simulatedDistance.value);
+            const personCount = parseInt(elements.personCount.value);
+
+            // 修正: 距離為 0 時也視為無效偵測
+            const hasValidDetection = receivedDistance > 0 && personCount > 0;
+
+            if (hasValidDetection) {
+                lastValidDetectionTime = now;
+                
+                if (!isDetectionActive) {
+                    if (detectionLostTime === 0 || (now - detectionLostTime) >= ACTIVATION_DELAY) {
+                        isDetectionActive = true;
+                        addLog('✅ 偵測啟動', 'detection');
+                    }
+                }
+                
+                if (isDetectionActive) {
+                    targetDistance = receivedDistance;
+                }
+            } else {
+                if (isDetectionActive) {
+                    const timeSinceLastValid = now - lastValidDetectionTime;
+                    
+                    if (timeSinceLastValid >= DEACTIVATION_DELAY) {
+                        isDetectionActive = false;
+                        targetDistance = 0;
+                        detectionLostTime = now;
+                        addLog('⏸ 偵測停用 - 開始恢復清晰', 'transition');
+                    }
+                }
+            }
+
+            // 距離平滑
+            if (smoothedDistance === 0) {
+                smoothedDistance = targetDistance;
+            }
+            
+            const distanceDiff = Math.abs(targetDistance - smoothedDistance);
+            if (distanceDiff > DISTANCE_CHANGE_THRESHOLD) {
+                smoothedDistance += (targetDistance - smoothedDistance) * DISTANCE_SMOOTH_SPEED;
+            } else {
+                smoothedDistance = targetDistance;
+            }
+
+            // 計算目標模糊
+            const normalizedDistance = calculateNormalizedDistance(smoothedDistance);
+            targetBlurRadius = lerp(config.max_blur, config.min_blur, normalizedDistance);
+
+            // 模糊平滑過渡
+            currentBlurRadius += (targetBlurRadius - currentBlurRadius) * BLUR_SMOOTH_SPEED;
+
+            updateUI();
+        }
+
+        function calculateNormalizedDistance(distance) {
+            if (distance <= config.min_distance) return 0;
+            if (distance >= config.max_distance) return 1;
+            return (distance - config.min_distance) / (config.max_distance - config.min_distance);
+        }
+
+        function lerp(start, end, t) {
+            return start + (end - start) * t;
+        }
+
+        function updateUI() {
+            elements.detectionStatus.textContent = isDetectionActive ? '🟢 啟用' : '⚪ 待機';
+            elements.detectionIndicator.className = 'active-indicator ' + (isDetectionActive ? 'on' : 'off');
+            elements.targetDistance.textContent = targetDistance.toFixed(1);
+            elements.smoothedDistance.textContent = smoothedDistance.toFixed(1);
+            elements.targetBlur.textContent = targetBlurRadius.toFixed(2);
+            elements.currentBlur.textContent = currentBlurRadius.toFixed(2);
+            
+            const progress = targetBlurRadius === 0 ? 0 : (currentBlurRadius / targetBlurRadius * 100);
+            elements.transitionProgress.textContent = progress.toFixed(0);
+        }
+
+        function addLog(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry ' + type;
+            const timestamp = new Date().toLocaleTimeString();
+            entry.textContent = `[${timestamp}] ${message}`;
+            elements.logContainer.insertBefore(entry, elements.logContainer.firstChild);
+            
+            // 限制日誌數量
+            while (elements.logContainer.children.length > 50) {
+                elements.logContainer.removeChild(elements.logContainer.lastChild);
+            }
+        }
+
+        // 測試場景
+        function scenario_personAppear() {
+            addLog('📍 場景: 人物出現', 'info');
+            elements.simulatedDistance.value = 70;
+            elements.personCount.value = 1;
+            updateValues();
+        }
+
+        function scenario_personDisappear() {
+            addLog('📍 場景: 人物離開', 'info');
+            elements.simulatedDistance.value = 0;
+            elements.personCount.value = 0;
+            updateValues();
+        }
+
+        function scenario_distanceZero() {
+            addLog('📍 場景: 距離變0但人數保持 (測試修正)', 'info');
+            // 先讓人出現
+            elements.simulatedDistance.value = 75;
+            elements.personCount.value = 1;
+            updateValues();
+            
+            // 2秒後距離變0但人數保持
+            setTimeout(() => {
+                addLog('⚠️ 距離變0,人數=1 (應觸發離開機制)', 'transition');
+                elements.simulatedDistance.value = 0;
+                elements.personCount.value = 1; // 保持人數
+                updateValues();
+            }, 2000);
+        }
+
+        function scenario_rapidMovement() {
+            addLog('📍 場景: 快速移動', 'info');
+            let distance = 60;
+            const interval = setInterval(() => {
+                elements.simulatedDistance.value = distance;
+                elements.personCount.value = 1;
+                updateValues();
+                distance += 5;
+                if (distance > 100) {
+                    clearInterval(interval);
+                }
+            }, 100);
+        }
+
+        function scenario_flickering() {
+            addLog('📍 場景: 閃爍測試 (模擬偵測不穩定)', 'info');
+            let toggle = true;
+            let count = 0;
+            const interval = setInterval(() => {
+                if (toggle) {
+                    elements.simulatedDistance.value = 75;
+                    elements.personCount.value = 1;
+                } else {
+                    elements.simulatedDistance.value = 0;
+                    elements.personCount.value = 0;
+                }
+                updateValues();
+                toggle = !toggle;
+                count++;
+                if (count > 10) {
+                    clearInterval(interval);
+                }
+            }, 300);
+        }
+
+        function scenario_reset() {
+            addLog('🔄 重置所有參數', 'info');
+            elements.simulatedDistance.value = 0;
+            elements.personCount.value = 0;
+            targetDistance = 0;
+            smoothedDistance = 0;
+            currentBlurRadius = 0;
+            targetBlurRadius = 0;
+            isDetectionActive = false;
+            lastValidDetectionTime = 0;
+            detectionLostTime = 0;
+            updateValues();
+            updateUI();
+        }
+
+        // 主循環
+        setInterval(handleDistanceData, 33); // ~30 FPS
+
+        addLog('✅ 測試工具已就緒', 'info');
+    </script>
+</body>
+</html>

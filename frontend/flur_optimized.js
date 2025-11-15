@@ -16,10 +16,26 @@ let targetDistance = 0;
 let smoothedDistance = 0;
 let currentBlurRadius = 0;
 let currentOpacity = 0;
+let targetBlurRadius = 0;
+let targetOpacity = 0;
 
 // 距離平滑過渡配置
 let DISTANCE_SMOOTH_SPEED = 0.15;
 let DISTANCE_CHANGE_THRESHOLD = 10;
+
+// 模糊控制參數 (從 blur_control 載入)
+let ACTIVATION_DELAY = 200;      // 啟動延遲 (毫秒)
+let DEACTIVATION_DELAY = 750;    // 停用延遲 (毫秒)
+let MOVEMENT_THRESHOLD = 5;       // 移動閾值 (cm)
+let BLUR_SMOOTH_SPEED = 0.12;     // 模糊參數平滑速度
+let RECOVERY_SPEED = 0.08;        // 恢復到清晰的速度 (距離=0後)
+
+// 偵測狀態追蹤
+let lastValidDetectionTime = 0;
+let isDetectionActive = false;
+let detectionLostTime = 0;
+let countdownStartTime = 0;       // 倒數開始時間
+let isInRecoveryMode = false;      // 是否在恢復模式中
 
 // FPS 計算
 let frameCount = 0;
@@ -47,11 +63,23 @@ async function loadConfig() {
         
         if (result.status === 'success') {
             config = result.data;
+            
+            // 載入距離平滑參數
             if (config.distance_smoothing) {
                 DISTANCE_SMOOTH_SPEED = config.distance_smoothing.smooth_speed || 0.15;
                 DISTANCE_CHANGE_THRESHOLD = config.distance_smoothing.change_threshold || 10;
             }
+            
+            // 載入模糊控制參數
+            if (config.blur_control) {
+                ACTIVATION_DELAY = config.blur_control.activation_delay || 200;
+                DEACTIVATION_DELAY = config.blur_control.deactivation_delay || 750;
+                MOVEMENT_THRESHOLD = config.blur_control.movement_threshold || 5;
+                RECOVERY_SPEED = config.blur_control.recovery_speed || 0.08;
+            }
+            
             console.log('✅ 配置已載入');
+            console.log('📋 模糊控制:', { ACTIVATION_DELAY, DEACTIVATION_DELAY, MOVEMENT_THRESHOLD, RECOVERY_SPEED });
         } else {
             useDefaultConfig();
         }
@@ -67,7 +95,8 @@ function useDefaultConfig() {
         display: { debug_mode: false, exhibition_mode: true },
         blur_overlay: { enabled: false, min_distance: 70, max_distance: 120, min_blur_radius: 0, max_blur_radius: 8, min_opacity: 0, max_opacity: 0.3, overlay_color: "#888888", easing_function: "ease-out", layer_count: 3, blend_mode: "normal" },
         canvas_filter: { enabled: true, min_distance: 70, max_distance: 120, min_blur_radius: 0, max_blur_radius: 5, easing_function: "ease-out", noise_enabled: true, min_noise_intensity: 0, max_noise_intensity: 0.08, noise_blend_mode: "overlay" },
-        distance_smoothing: { enabled: true, smooth_speed: 0.15, change_threshold: 10 }
+        distance_smoothing: { enabled: true, smooth_speed: 0.15, change_threshold: 10 },
+        blur_control: { activation_delay: 200, deactivation_delay: 750, movement_threshold: 5 }
     };
 }
 
@@ -196,8 +225,75 @@ function connectWebSocket() {
 function handleDistanceData(data) {
     if (data.type !== 'distance_data') return;
     
-    targetDistance = data.distance || 0;
+    const now = performance.now();
+    const receivedDistance = data.distance || 0;
+    const personCount = data.total_count || 0;
     
+    // 偵測狀態管理
+    const hasValidDetection = receivedDistance > 0 && personCount > 0;
+    
+    if (hasValidDetection) {
+        // 有效偵測 (有距離且有人數)
+        lastValidDetectionTime = now;
+        
+        // 重置倒數計時器
+        countdownStartTime = 0;
+        
+        // 如果在恢復模式中，立即退出恢復模式
+        if (isInRecoveryMode) {
+            isInRecoveryMode = false;
+            console.log('🔄 偵測到人，退出恢復模式');
+        }
+        
+        if (!isDetectionActive) {
+            // 剛開始偵測,檢查啟動延遲
+            if (detectionLostTime === 0 || (now - detectionLostTime) >= ACTIVATION_DELAY) {
+                isDetectionActive = true;
+                console.log('✅ 偵測啟動');
+            }
+        }
+        
+        if (isDetectionActive) {
+            targetDistance = receivedDistance;
+        }
+    } else {
+        // 無效偵測 (距離為0 或 無人數)
+        if (isDetectionActive && !isInRecoveryMode) {
+            // 開始倒數
+            if (countdownStartTime === 0) {
+                countdownStartTime = now;
+                console.log('⏱ 距離=0，開始倒數', DEACTIVATION_DELAY, 'ms');
+            }
+            
+            const timeSinceCountdownStart = now - countdownStartTime;
+            
+            if (timeSinceCountdownStart >= DEACTIVATION_DELAY) {
+                // 倒數結束，進入恢復模式
+                isDetectionActive = false;
+                isInRecoveryMode = true;
+                console.log('⏸ 倒數結束 - 開始逐步恢復清晰');
+            } else {
+                // 在倒數期間，保持當前目標距離
+                // 不更新 targetDistance,讓模糊效果保持
+            }
+        }
+    }
+    
+    // 恢復模式：逐步將 targetDistance 降到 0 (最清晰)
+    if (isInRecoveryMode) {
+        if (targetDistance > 0) {
+            // 使用指數衰減逐步降低目標距離
+            targetDistance -= targetDistance * RECOVERY_SPEED;
+            
+            // 當接近0時直接設為0
+            if (targetDistance < 0.5) {
+                targetDistance = 0;
+                console.log('✅ 完全恢復到清晰狀態');
+            }
+        }
+    }
+    
+    // 距離平滑過渡
     if (smoothedDistance === 0) {
         smoothedDistance = targetDistance;
     }
@@ -210,8 +306,25 @@ function handleDistanceData(data) {
     }
     
     currentDistance = smoothedDistance;
-    updateDebugInfo('distance', `${targetDistance.toFixed(1)} cm → ${smoothedDistance.toFixed(1)} cm`);
-    updateDebugInfo('count', data.total_count || 0);
+    
+    // 更新除錯資訊
+    let detectionStatus = '';
+    if (isInRecoveryMode) {
+        detectionStatus = '🔄 恢復中';
+    } else if (isDetectionActive) {
+        if (countdownStartTime > 0) {
+            const remaining = Math.max(0, DEACTIVATION_DELAY - (now - countdownStartTime));
+            detectionStatus = `⏱ 倒數 ${(remaining / 1000).toFixed(1)}s`;
+        } else {
+            detectionStatus = '🟢 啟用';
+        }
+    } else {
+        detectionStatus = '⚪ 待機';
+    }
+    
+    const validStatus = hasValidDetection ? '✓' : '✗';
+    updateDebugInfo('distance', `${receivedDistance.toFixed(1)} → ${smoothedDistance.toFixed(1)} cm ${detectionStatus} ${validStatus}`);
+    updateDebugInfo('count', personCount);
 }
 
 // ===== 渲染循環 =====
@@ -261,11 +374,16 @@ function applyCanvasFilter() {
     );
     
     const easedValue = applyEasing(normalizedDistance, filterConfig.easing_function || 'ease-out');
-    const blurRadius = lerp(filterConfig.max_blur_radius, filterConfig.min_blur_radius, easedValue);
+    
+    // 計算目標模糊半徑
+    targetBlurRadius = lerp(filterConfig.max_blur_radius, filterConfig.min_blur_radius, easedValue);
+    
+    // 平滑過渡當前模糊半徑
+    currentBlurRadius += (targetBlurRadius - currentBlurRadius) * BLUR_SMOOTH_SPEED;
     
     ctx.save();
-    if (blurRadius > 0) {
-        ctx.filter = `blur(${blurRadius}px)`;
+    if (currentBlurRadius > 0.1) {
+        ctx.filter = `blur(${currentBlurRadius}px)`;
     }
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     ctx.filter = 'none';
@@ -282,7 +400,7 @@ function applyCanvasFilter() {
         }
     }
     
-    updateDebugInfo('blur', `Canvas Filter: ${blurRadius.toFixed(1)} px`);
+    updateDebugInfo('blur', `Canvas Filter: ${currentBlurRadius.toFixed(1)} px (目標: ${targetBlurRadius.toFixed(1)})`);
 }
 
 // ===== 繪製模糊圖層 =====
@@ -297,13 +415,18 @@ function drawBlurOverlay() {
     
     const easedValue = applyEasing(normalizedDistance, overlay.easing_function);
     
-    currentBlurRadius = lerp(overlay.max_blur_radius, overlay.min_blur_radius, easedValue);
-    currentOpacity = lerp(overlay.max_opacity, overlay.min_opacity, easedValue);
+    // 計算目標模糊參數
+    const targetOverlayBlur = lerp(overlay.max_blur_radius, overlay.min_blur_radius, easedValue);
+    const targetOverlayOpacity = lerp(overlay.max_opacity, overlay.min_opacity, easedValue);
     
-    updateDebugInfo('blur', `${currentBlurRadius.toFixed(1)} px`);
-    updateDebugInfo('opacity', `${(currentOpacity * 100).toFixed(1)}%`);
+    // 平滑過渡模糊圖層參數
+    currentBlurRadius += (targetOverlayBlur - currentBlurRadius) * BLUR_SMOOTH_SPEED;
+    currentOpacity += (targetOverlayOpacity - currentOpacity) * BLUR_SMOOTH_SPEED;
     
-    if (currentBlurRadius > 0 && currentOpacity > 0) {
+    updateDebugInfo('blur', `${currentBlurRadius.toFixed(1)} px (目標: ${targetOverlayBlur.toFixed(1)})`);
+    updateDebugInfo('opacity', `${(currentOpacity * 100).toFixed(1)}% (目標: ${(targetOverlayOpacity * 100).toFixed(1)}%)`);
+    
+    if (currentBlurRadius > 0.1 && currentOpacity > 0.01) {
         const layerCount = overlay.layer_count || 3;
         const opacityPerLayer = currentOpacity / layerCount;
         

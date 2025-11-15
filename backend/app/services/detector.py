@@ -92,6 +92,28 @@ class YOLODetectorService:
             self.cap = None
             print("⏹ 攝影機已停止")
     
+    def rotate_frame(self, frame, angle):
+        """
+        旋轉影像
+        
+        Args:
+            frame: 輸入影像
+            angle: 旋轉角度 (0, 90, 180, 270)
+        
+        Returns:
+            旋轉後的影像
+        """
+        if angle == 0:
+            return frame
+        elif angle == 90:
+            return cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+        elif angle == 180:
+            return cv2.rotate(frame, cv2.ROTATE_180)
+        elif angle == 270:
+            return cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        else:
+            return frame
+    
     async def start_detection(self):
         """啟動偵測"""
         if self.is_running:
@@ -145,6 +167,11 @@ class YOLODetectorService:
                     print("⚠ 無法讀取影像,嘗試重新連接...")
                     await asyncio.sleep(1)
                     continue
+                
+                # === 套用旋轉 ===
+                rotation_angle = self.config["camera"].get("rotation", 0)
+                if rotation_angle != 0:
+                    frame = self.rotate_frame(frame, rotation_angle)
                 
                 # 儲存當前幀供 Flur 串流使用
                 self.current_frame = frame.copy()

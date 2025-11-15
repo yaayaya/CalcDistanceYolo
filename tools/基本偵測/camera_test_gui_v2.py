@@ -78,7 +78,8 @@ class ConfigManager:
             "camera": {
                 "source": 0,
                 "width": 1920,
-                "height": 1080
+                "height": 1080,
+                "rotation": 0
             },
             "model": {
                 "model_path": "yolo11n.pt",
@@ -314,10 +315,18 @@ class YOLO11DistanceDetectorGUI:
         ttk.Label(res_frame, text=" x ").pack(side=tk.LEFT)
         ttk.Entry(res_frame, textvariable=self.height_var, width=8).pack(side=tk.LEFT)
         
+        # 旋轉角度
+        ttk.Label(source_frame, text="旋轉角度:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        self.rotation_var = tk.IntVar(value=self.config["camera"].get("rotation", 0))
+        rotation_combo = ttk.Combobox(source_frame, textvariable=self.rotation_var, 
+                                      values=[0, 90, 180, 270], width=10, state="readonly")
+        rotation_combo.grid(row=2, column=1, sticky=tk.W, padx=5)
+        ttk.Label(source_frame, text="(順時針旋轉)").grid(row=2, column=2, sticky=tk.W)
+        
         # 儲存攝影機設定按鈕
         ttk.Button(source_frame, text="💾 儲存攝影機設定", 
                   command=self.save_camera_settings).grid(
-            row=2, column=0, columnspan=3, pady=10)
+            row=3, column=0, columnspan=3, pady=10)
         
         # 效能設定
         perf_frame = ttk.LabelFrame(parent, text="效能設定", padding="10")
@@ -786,6 +795,11 @@ class YOLO11DistanceDetectorGUI:
             if not ret:
                 break
             
+            # 套用旋轉
+            rotation_angle = self.config["camera"].get("rotation", 0)
+            if rotation_angle != 0:
+                frame = self.rotate_frame(frame, rotation_angle)
+            
             frame_count += 1
             
             # 跳幀處理
@@ -901,6 +915,27 @@ class YOLO11DistanceDetectorGUI:
             except Exception as e:
                 print(f"偵測錯誤: {e}")
                 continue
+    
+    def rotate_frame(self, frame, angle):
+        """旋轉影像
+        
+        Args:
+            frame: 輸入影像
+            angle: 旋轉角度 (0, 90, 180, 270)
+        
+        Returns:
+            旋轉後的影像
+        """
+        if angle == 0:
+            return frame
+        elif angle == 90:
+            return cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+        elif angle == 180:
+            return cv2.rotate(frame, cv2.ROTATE_180)
+        elif angle == 270:
+            return cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        else:
+            return frame
     
     def get_distance_color(self, distance):
         """根據距離返回顏色"""
@@ -1173,6 +1208,7 @@ class YOLO11DistanceDetectorGUI:
             self.config["camera"]["source"] = int(self.source_var.get()) if self.source_var.get().isdigit() else self.source_var.get()
             self.config["camera"]["width"] = self.width_var.get()
             self.config["camera"]["height"] = self.height_var.get()
+            self.config["camera"]["rotation"] = self.rotation_var.get()
             
             if ConfigManager.save_config(self.config, self.config_path):
                 messagebox.showinfo("成功", "攝影機設定已儲存至 sensor_config.json")
@@ -1277,6 +1313,7 @@ class YOLO11DistanceDetectorGUI:
         self.source_var.set(str(self.config["camera"]["source"]))
         self.width_var.set(self.config["camera"]["width"])
         self.height_var.set(self.config["camera"]["height"])
+        self.rotation_var.set(self.config["camera"].get("rotation", 0))
         
         self.conf_var.set(self.config["model"]["conf"])
         self.iou_var.set(self.config["model"]["iou"])
